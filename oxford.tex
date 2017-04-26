@@ -348,6 +348,28 @@
 \end{tikzpicture}
 \end{center}
 
+\note{
+  \begin{itemize}
+    \item Largely, my work can be broken down into a few categories
+    \item First work on generating test inputs for a program, using techniques
+      such as symbolic execution, where test inputs could be concrete inputs to pass
+      to a program, or new thread schedules to explore. Here the goal could be
+      to increase code coverage or find bugs
+    \item Second, is work specificly tailored to bug hunting using techniques
+      such as model checking, where we would like to find test inputs, again
+      either concrete inputs or thread schedules, causing a property to be
+    violated. 
+  \item Third, are works focusing on automated program repair,
+      using techniques such as program synthesis, in order to automatically
+      make modifications to a program, or automatically deduce information
+      useful to a programmer
+    \item Fourth and finally I focus on verification via abstract interpretation in order to automatically generate proofs of correctness of arbitrary programs.
+    \item Surrounding all of these techniques are a focus on making analyses
+      either incremental, or property directed. Both of these approaches aim to
+      reduce the scope of the analysis, thereby increasing efficiency, 
+  \end{itemize}
+}
+
 \end{frame}
 
 \end{document}
