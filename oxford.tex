@@ -11,6 +11,7 @@
 \usepackage[normalem]{ulem}
 \usepackage{braket}
 \usepackage{adjustbox}
+\usepackage{appendixnumberbeamer}
 
 \usetikzlibrary{arrows, tikzmark, shadows, calc, matrix, positioning}
 % Allows for line numbers in a listing to be referenced in tikz
@@ -410,8 +411,9 @@
     , line width=1pt
     , anchor=center
     , text centered
-    , minimum width={10em},
-    , minimum height={2em},
+    , rounded corners
+    %, minimum width={10em},
+    %, minimum height={2em},
     %, rounded corners
   },
 }
@@ -426,8 +428,9 @@
     , line width=1pt
     , anchor=center
     , text centered
-    , minimum width={10em},
-    , minimum height={2em},
+    , rounded corners
+    %, minimum width={10em},
+    %, minimum height={2em},
     %, rounded corners
   },
 }
@@ -520,11 +523,11 @@
             {\Large Trusted Process}
             \& {\Large Attacker}
             \\
-            |[thread]| {\Large \texttt{protect = false;}} 
+            |[thread]| {\Large \texttt{protect = false}} 
             \& |[thread]| {\Large \texttt{if (!protect)}}
             \\
-            |[thread]| {\Large \texttt{protect = true;}} 
-            \& |[thread]| {\Large \texttt{ERROR;}} 
+            |[thread]| {\Large \texttt{protect = true}} 
+            \& |[thread]| {\Large \texttt{ERROR}} 
             \\
           }; % matrix
       \end{tikzpicture}
@@ -541,17 +544,17 @@
             {\Large Trusted Process}
             \& {\Large Attacker}
             \\
-            |[thread]| {\Large \texttt{protect = false;}} %2-1
+            |[thread]| {\Large \texttt{protect = false}} %2-1
             \& {}
             \\
-            |[thread]| {\Large \texttt{protect = true;}} %3-1
+            |[thread]| {\Large \texttt{protect = true}} %3-1
             \& {}
             \\
             {}
             \& |[thread]| {\Large \texttt{if (!protect)}} %4-2
             \\
             {}
-            \& |[unreach]| {\Large \texttt{ERROR;}} %5-2
+            \& |[unreach]| {\Large \texttt{ERROR}} %5-2
             \\
           }; % matrix
           \draw[>=latex,->, garr] 
@@ -580,16 +583,16 @@
             {\Large Trusted Process}
             \& {\Large Attacker}
             \\
-            |[thread,]| {\Large \texttt{protect = false;}} %2-1
+            |[thread,]| {\Large \texttt{protect = false}} %2-1
             \& {}
             \\
             {}
             \& |[thread,]| {\Large \texttt{if (!protect)}} %4-2
             \\
             {}
-            \& |[thread,]| {\Large \texttt{ERROR;}} %5-2
+            \& |[thread,]| {\Large \texttt{ERROR}} %5-2
             \\
-            |[thread,]| {\Large \texttt{protect = true;}} %3-1
+            |[thread,]| {\Large \texttt{protect = true}} %3-1
             \& {}
             \\
           }; % matrix
@@ -1345,13 +1348,15 @@
         column sep=20mm,
         row sep=10mm,
         ampersand replacement=\&,
-        nodes={draw, % General options for all nodes
-          line width=1pt,
-          anchor=center, 
-          text centered,
-          rounded corners,
-          %minimum width=1.5cm, minimum height=8mm
-        },
+        nodes={thread},
+        %nodes={draw, % General options for all nodes
+        %  line width=1pt,
+        %  anchor=center, 
+        %  fill=matorange400,
+        %  text centered,
+        %  rounded corners,
+        %  %minimum width=1.5cm, minimum height=8mm
+        %},
           % special styles
           txt/.style={minimum width=2cm,anchor=center},
         ] {
@@ -1678,13 +1683,14 @@
         column sep=15mm,
         row sep=10mm,
         ampersand replacement=\&,
-        nodes={draw, % General options for all nodes
-          line width=1pt,
-          anchor=center, 
-          text centered,
-          rounded corners,
-          %minimum width=1.5cm, minimum height=8mm
-        },
+        nodes={thread},
+        %nodes={draw, % General options for all nodes
+        %  line width=1pt,
+        %  anchor=center, 
+        %  text centered,
+        %  rounded corners,
+        %  %minimum width=1.5cm, minimum height=8mm
+        %},
           % special styles
           txt/.style={minimum width=2cm,anchor=center},
         ] {
@@ -1734,64 +1740,6 @@
   }
 \end{frame}
 
-\begin{frame}[fragile]{Handling Loops}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=loop]
-  int x = 0;
-  void thread1() {
-    create(thread2);
-    while (*) {
-      int t1 = x;
-    }
-    create(thread3);
-  }
-      \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=loop]
-  void thread2() {
-    x = 1;
-    x = 2;
-  }
-  void thread3() {
-    x = 10;
-  }
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \pause
-  \begin{itemize}[<+->]
-    \item 0*1*2*
-    \item $\Set{0,1,2}$
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Thus far, I've ignored the case where shared memory reads are
-        performed within a loop
-      \item In general, when a load is in a loop it can read from an arbitrary,
-        and potentially infinite, number of different interferences
-      \item As a result, if we simply treat loads within loops in the same way
-        as as previously described there could be an infinite number of
-        infinitely long combinations
-      \item Consider this example, thread one creates thread two and then
-        repeatedly loads the value of x an arbitrary number of times before
-        creating thread two
-      \item Notice that there is a must-happen-before edges between the load
-        within the loop and the write to x by thread 3: because thread 3 is
-        created after the load, the load cannot read the values written by
-        thread 3
-      \item So, the value read within the loop could be any sequence starting
-        with an arbitrary number of zeros, followed by ones, followed by 2s
-      \item Our previous system of constraints cannot handle such an infinite
-        sequence so, instead, we merge all the potential interferences into a
-        single value
-      \item This means that the loads performed across loop-iterations will not
-        be handled in a flow-sensitive way, but, any interfering store which
-        cannot be read on any iteration will be remove thus improving acurracy
-    \end{itemize}
-  }
-\end{frame}
 
 \begin{frame}{Optimizations}
   \begin{itemize}[<+->]
@@ -1799,118 +1747,18 @@
     \item Clustering
   \end{itemize}
   \note{
+    %\begin{itemize}
+    %  \item Next, I'll go over two optimizations we created for our technique
+    %  \item The two optimizations we used we call property directed pruning and
+    %    clustering
+    %\end{itemize}
     \begin{itemize}
-      \item Next, I'll go over two optimizations we created for our technique
-      \item The two optimizations we used we call property directed pruning and
-        clustering
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Property Directed Pruning}
-
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=motiv3]
-int x = 0;
-void thr(int v) {
-  int t1 = 5 * v;
-  int t2 = x;
-  x = t1 + t2;
-  if (t1 < 0) 
-    ERROR!;
-}
-    \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=motiv3]
-int main() {
-  thread_create(thr,5);
-  thread_create(thr,10);
-  x = 1;
-  thread_exit(0);
-}
-
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \note{
-    \begin{itemize}
-      \item First, property directed pruning uses slices from the
-        program-dependence graph to remove redundant statements
-      \item If we look at this program, the main thread, on the right, creates
-        two threads with arguments 5 and 10, and then performs a shared memory
-        write to x
-      \item The threads use their argument to perform a computation, and then
-        perform a separate computation related to x
-      \item The property being checked is related to t1, and the input argument
-        to the thread
-      \item If we look at the property being checking within each thread, it
-        only depends on the input to the thread: the shared memory read on x
-        has no influence on the reachability of the ERROR
-      \item So, during the abstract interpretation, we can skip those
-        statements involved with x
-      \item Additionally, when exploring possible interference combinations, we
-        can skip those related to x
-      \item So, this both reduces the number of interference combinations and
-        also reduces the individual analysis of each thread
-      \item These dependencies between statements are captured easily by using
-        the program dependence graph
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Clustering}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=prop]
-int x = 0;
-int y = 0;
-void thread1() {
-  x = 1;
-  y = 1;
-}
-    \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=prop]
-void thread2() {
-  int t1 = x;
-  int t2 = y;
-  assert(x >= 0);
-  assert(y >= 0);
-}
-    \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \pause
-  \begin{itemize}[<+->]
-    \item $2*2 = 4$ interference combinations
-    \item Clustering: 2 combinations
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item The second optimization we use is called clustering and also uses
-        the program dependence graph
-      \item This optimization reduces the number of possible interference
-        combinations thereby reducing the runtime of the analysis
-      \item Here we have two threads, one performing shared memory writes to
-       x and y, and the other is performing shared memory read
-      \item The two properties being analyzed are separately on x and y
-      \item Using the previously described technique, there are two possible
-        interfering stores for each of the loads in thread 2: one from thread 1
-        and one causing thread 2 to read from its own memory environment
-      \item This means that thread 2 will have to be analyzed 4 times, one for
-        each combination
-      \item However, if we look at the program, the properties being checked
-        are performed on disjoint computations 
-      \item Specifically, the writes to x and the writes to y do not influence
-        each other
-      \item So, during the analysis, the combinations between the reads of x
-        and y in thread two can be performed independently
-      \item As a result, we only need to consider the two combinations
-        independently meaning we only need to run the analysis twice for thread
-        two
+      \item We introduced two optimizations, one making the analysis property
+        directed, and another we called clustering
+      \item Clustering groups together loads and stores into subsets and only
+        explores the combinations within these clusters, similar to the packing
+        of relational abstract domains
+      \item For the sake of time, I wont go into these details
     \end{itemize}
   }
 \end{frame}
@@ -1985,10 +1833,60 @@ void thread2() {
 
 \subsection{Weak Memory}
 \begin{frame}{Handling to TSO/PSO/RMO}
+  \begin{center}
+    Initially: \texttt{x = flag = 0}
+    \begin{tikzpicture}
+      \matrix (wm) [matrix of nodes
+                    , column sep=20mm
+                    , row sep=10mm
+                    % Beamer messes with everything
+                    , ampersand replacement=\&
+                   ]
+       {
+         |[thread]| {\texttt{x = 4}} 
+         \& |[thread]|{\texttt{if (flag)}} 
+         \\
+         |[thread]|{\texttt{x = 5}} 
+         \& |[thread]|{\texttt{assert(x == 5)}}
+         \\
+         |[thread]|{\texttt{flag = 1}} 
+         \& {}
+         \\
+       };%matrix
+       \draw[>=latex,->, garr] (wm-1-1.south) -- (wm-2-1.north);
+       \draw[>=latex,->, garr, visible on=<1-3>] (wm-2-1.south) -- (wm-3-1.north);
+       \draw[>=latex,->, garr] (wm-1-2.south) -- (wm-2-2.north);
+
+       \draw[>=latex,->, darrc, visible on=<2->] (wm-1-1.east) -- (wm-2-2.west);
+       \draw[>=latex,->, darrc, visible on=<2->] (wm-3-1.east) -- (wm-1-2.west);
+       \draw[>=latex,->, darr, visible on=<3->] (wm-2-2.west) -- (wm-2-1.east);
+       % This duplicate arrow is necessary to get the 4th slide to appea, and
+       % thus make the arrow between (2,1) and (3,1) disappear after the third
+       % slide. 
+       \draw[>=latex,->, darr, visible on=<4->] (wm-2-2.west) -- (wm-2-1.east);
+    \end{tikzpicture}
+  \end{center}
   \note{
     \begin{itemize}
       \item The previous constraint analysis reasoning about interference
-        infeasibility assumed sequential consistency
+        infeasibility assumed sequential consistency 
+      \item Sequential consistency was assumed since program-order constraints
+        between statements were used in the analysis not necessarily enforced
+        under certain weak memory models
+      \item For example, consider this program where the left thread sets x to
+        4, and then to 5, and then sets flag to 1
+      \item The right thread checks if the value of flag is one, and, if so,
+        asserts that x is 5
+      \item Consider the case where the right thread reads flag to be 1, and
+        x to be 4
+      \item Under SC this exection is safe since in order for x to be 4 the
+        assertion must execute before the second write to x, which means flag
+        cannot be one
+      \item But, under PSO and RMO, writes to different variables may be
+        reordered, so, conceptually, the write to flag may occur before the
+        writes to x
+      \item To compensate for this, we developed a set of new inference rules
+        sound under TSO, PSO, and RMO
     \end{itemize}
   }
 \end{frame}
@@ -2072,8 +1970,8 @@ void thread2() {
       \node[thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
       \node[thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
 
-      \draw[garr] (xf.west) -| ([xshift=-0.5cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-0.5cm]ifx.west) -- (ifx.west);
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
 
       \draw[garr] (yf.east) -| ([xshift=1.5cm]ify.east);
       \draw[garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
@@ -2092,8 +1990,8 @@ void thread2() {
       \node[opacity=0.2,thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
       \node[opacity=0.2,thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
 
-      \draw[garr] (xf.west) -| ([xshift=-0.5cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-0.5cm]ifx.west) -- (ifx.west);
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
 
       \draw[opacity=0.2,garr] (yf.east) -| ([xshift=1.5cm]ify.east);
       \draw[opacity=0.2,garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
@@ -2148,6 +2046,7 @@ void thread3() {
 \end{lstlisting}
 \end{column}
 \begin{column}{0.5\textwidth}
+  \begin{onlyenv}<2->
 \begin{lstlisting}[language=C]
 x = y = z = 0;
 flag1 = flag2 = 0;
@@ -2168,7 +2067,8 @@ void thread3() {
   if (flag2)
     assert(z == 1);
 }
-\end{lstlisting}
+\end{lstlisting}%
+\end{onlyenv}%
 \end{column}
 \end{columns}
   \note{
@@ -2196,35 +2096,25 @@ void thread3() {
 %\begin{adjustbox}{totalheight=\textheight-2\baselineskip}
   \begin{center}
 \begin{tikzpicture}
-  \tikzstyle{node}=[draw
-                    , line width=1pt
-                    , anchor=center
-                    , text centered
-                    , rounded corners
-                    , font=\scriptsize]
-  \tikzstyle{imp}=[draw
-                   , line width=1pt
-                   , ggreen
-                   , anchor=center
-                   , text centered
-                   , dashed
-                   , rounded corners
-                   , font=\scriptsize]
-  \tikzstyle{may-imp}=[draw
-                   , line width=1pt
-                   , matblue400
-                   , anchor=center
-                   , text centered
-                   , dotted
-                   , rounded corners
-                   , font=\scriptsize]
-  \tikzstyle{mod}=[draw
-                   , line width=1pt
-                   , matred400
-                   , anchor=center
-                   , text centered
-                   , rectangle
-                   , font=\scriptsize]
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
 \matrix (m) [
  matrix of nodes
  , column sep=23mm
@@ -2298,7 +2188,7 @@ void thread3() {
 
 \begin{frame}{Incremental Thread-Modular Analysis}
   \begin{itemize}[<+->]
-    \item Maybe impacted
+    \item May be impacted
     \item May impact
     \item Preserve analysis results
     \item Ignore transfer functions
@@ -2314,8 +2204,8 @@ void thread3() {
       \item Using this information we are able to preserve analysis results
         from the old program version, as well as ignore the transfer functions
         of many statements
-      \item This reduce the runtime by causing the analysis to converge much
-        faster
+      \item This causes the analysis to converge much faster and thus reduce
+        runtime
     \end{itemize} 
   } 
 \end{frame}
@@ -2323,8 +2213,197 @@ void thread3() {
 
 \section{Experiments}
 
+\begin{frame}{Overview}
+  \tableofcontents[currentsection,currentsubsection]
+\note {
+  Next I'll summarize our experimental results. All tests were done on a
+  consumer linux laptop with 8 GB of ram and a 2.8 GHz x86 processor
+}
+\end{frame}
+
+\begin{frame}{Constraint-Based Abstract Interpreter for SC}
+  \begin{itemize}[<+->]
+    \item 38 C programs (SVComp, device drivers)
+    \item Compared to Min\`{e} [VMCAI 2014]
+      \begin{itemize}
+        \item 38 verified properties
+        \item 154s runtime
+      \end{itemize}
+    \item Our fully optimized approach 
+      \begin{itemize}
+        \item 1,078 verified properties
+        \item 480s runtime
+      \end{itemize}
+    \item 28x more verified properties
+    \item 3x increase in time
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item First, here are the results of our tool testing sequentially
+        consistent programs.
+      \item We ran our tool on 38 C programs and compared it against Mine's
+        non-constraint based thread-modular analyzer
+      \item His approach was able to verify 38 properties in 154 seconds,
+        whereas our tool verified 1,078 properties in 480 seconds
+      \item This is a total of 28 more verified properties with a 3x increase
+        in runtime
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+    \item 52 C programs (device drivers), litmus tests
+    \item Compared to Min\`{e}
+      \begin{itemize}
+        \item 1752 verified properties
+        \item 415s
+      \end{itemize}
+    \item Compared to Duet [Farzan and Kincaid, POPL 2012]
+      \begin{itemize}
+        \item 2432 verified properties
+        \item 106s
+      \end{itemize}
+    \item Our new method
+      \begin{itemize}
+        \item 4577 verified properties
+        \item 5387s
+      \end{itemize}
+    \item 12--50x runtime increase
+    \item 1.8--2.6x increase in verified properties
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Next, we evaluated our approach sound under TSO, PSO and RMO
+      \item We again compared against Mine, and also a tool by Farzan and
+        Kincaid called Duet
+      \item We tested on 52 C programs as well as a large selection of Litmus
+        tests
+      \item Mine was able to verify 1752 properties in 415 seconds, Duet 2432
+        properties in 106 seconds, and our tool verified 4577 properties in
+        5387 seconds
+      \item This is a 12--50x increase in runtime for a 1.8--2.6x increase in
+        the number of verified properties
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+      \item Average 57\% of program impacted by modifications
+      \item Ranging from 1.5\%--92\%
+      \item Min\'{e}
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 1263 seconds
+        \end{itemize}
+      \item Incremental w/o constraints
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 748 seconds
+        \end{itemize}
+      \item Non-incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 14,389 seconds
+        \end{itemize}
+      \item Incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 2642 seconds
+        \end{itemize}
+    \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Finally, here are the results for our incremental analyzer. We
+        compared again to Min\'{e} and implemented an incremental version of
+        both his algorithm, as well as our constaint-based analyzer
+      \item Our test set had 57\% of the program impacted on average, ranging
+        from 1.5 to 92 percent.
+      \item First, his approach verified 6384 properties in 1,263 seconds,
+        whereas our incremental version verified the same number of properties
+        in 748 seconds, about a 1.7x speedup
+      \item Second, the constraint based approach took 14,000 seconds to verify
+        11,458 properties, whereas our incremental version took only 2642
+        seconds to verify the same number of properties, about a 5.4x speedup
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}[<+->]
+    \item Constraint-Based Thread-Modular Abstract Interpretation
+    \item Handling TSO, PSO, RMO
+    \item Weak-memory aware change-impact analysis
+    \item Incremental thread-modular abstract interpretation
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item So, in conclusion I presented a constraint-based thread-modular
+        abstract interpretation algorithm
+      \item I introduced how it can be extended to handle TSO, PSO, and RMO
+      \item Also, I showed the intuition behind a weak-memory aware
+        change-impact analysis, and a incremental thread-modular analyzer
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}
+
+\begin{center}
+\begin{tikzpicture}
+  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+
+  \DrawSquare{5.5cm}{in}
+  \DrawSquare{8cm}{out}
+  \FillSquare{out}{1}{matorange400}
+  \FillSquare{out}{2}{matorange400}
+  \FillSquare{out}{3}{matorange400}
+  \FillSquare{out}{4}{matorange400}
+
+  \FillSquare{in}{1}{matyellow400}
+  \FillSquare{in}{2}{matyellow400}
+  \FillSquare{in}{3}{matyellow400}
+  \FillSquare{in}{4}{matyellow400}
+
+  \DrawLines{in}
+
+
+  \LabelRegionVis{in}{1}{Test Generation}{<2->}
+  \LabelRegionSmallVis{in}{1}{[FSE15, ASE16]}{<2->}
+
+  \LabelRegionVis{in}{2}{Bug Hunting}{<3->}
+  \LabelRegionSmallVis{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
+
+  \LabelRegionVis{in}{3}{Repair}{<4->}
+  \LabelRegionSmallVis{in}{3}{[ICSE15, ISSTA15]}{<4->}
+
+  \LabelRegionVis{in}{4}{Verification}{<5->}
+  \LabelRegionSmallVis{in}{4}{[FSE16$^1$]}{<5->}
+
+
+  \node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
+  \node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  \node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
+  \node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+
+  %\node at (1.6cm,1cm) {Test Generation};
+  %\node at (4.4cm,1cm) {Bug Hunting};
+  %\node at (1.6cm,-1cm) {Program Repair};
+  %\node at (4.4cm,-1cm) {Verification};
+\end{tikzpicture}
+\end{center}
+  \note{
+    \begin{itemize}
+      \item With that, I'll take any questions
+    \end{itemize}
+  }
+\end{frame}
+
 
 %%%%%%% Backup slides
+\appendix
 \begin{frame}{Soundness}
   \begin{itemize}
     \item<1-> As sound as underlying sequential abstract interpreter
@@ -2455,5 +2534,173 @@ void thread3() {
     \end{itemize}
   }
 \end{frame}
+
+\begin{frame}[fragile]{Handling Loops}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=loop]
+  int x = 0;
+  void thread1() {
+    create(thread2);
+    while (...) {
+      int t1 = x;
+    }
+    create(thread3);
+  }
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=loop]
+  void thread2() {
+    x = 1;
+    x = 2;
+  }
+  void thread3() {
+    x = 10;
+  }
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \pause
+  \begin{itemize}[<+->]
+    \item 0*1*2*
+    \item $\Set{0,1,2}$
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Thus far, I've ignored the case where shared memory reads are
+        performed within a loop
+      \item In general, when a load is in a loop it can read from an arbitrary,
+        and potentially infinite, number of different interferences
+      \item As a result, if we simply treat loads within loops in the same way
+        as as previously described there could be an infinite number of
+        infinitely long combinations
+      \item Consider this example, thread one creates thread two and then
+        repeatedly loads the value of x an arbitrary number of times before
+        creating thread two
+      \item Notice that there is a must-happen-before edges between the load
+        within the loop and the write to x by thread 3: because thread 3 is
+        created after the load, the load cannot read the values written by
+        thread 3
+      \item So, the value read within the loop could be any sequence starting
+        with an arbitrary number of zeros, followed by ones, followed by 2s
+      \item Our previous system of constraints cannot handle such an infinite
+        sequence so, instead, we merge all the potential interferences into a
+        single value
+      \item This means that the loads performed across loop-iterations will not
+        be handled in a flow-sensitive way, but, any interfering store which
+        cannot be read on any iteration will be remove thus improving acurracy
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Property Directed Pruning}
+
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=motiv3]
+int x = 0;
+void thr(int v) {
+  int t1 = 5 * v;
+  int t2 = x;
+  x = t1 + t2;
+  if (t1 < 0) 
+    ERROR!;
+}
+    \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=motiv3]
+int main() {
+  thread_create(thr,5);
+  thread_create(thr,10);
+  x = 1;
+  thread_exit(0);
+}
+
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item First, property directed pruning uses slices from the
+        program-dependence graph to remove redundant statements
+      \item If we look at this program, the main thread, on the right, creates
+        two threads with arguments 5 and 10, and then performs a shared memory
+        write to x
+      \item The threads use their argument to perform a computation, and then
+        perform a separate computation related to x
+      \item The property being checked is related to t1, and the input argument
+        to the thread
+      \item If we look at the property being checking within each thread, it
+        only depends on the input to the thread: the shared memory read on x
+        has no influence on the reachability of the ERROR
+      \item So, during the abstract interpretation, we can skip those
+        statements involved with x
+      \item Additionally, when exploring possible interference combinations, we
+        can skip those related to x
+      \item So, this both reduces the number of interference combinations and
+        also reduces the individual analysis of each thread
+      \item These dependencies between statements are captured easily by using
+        the program dependence graph
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Clustering}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=prop]
+int x = 0;
+int y = 0;
+void thread1() {
+  x = 1;
+  y = 1;
+}
+    \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=prop]
+void thread2() {
+  int t1 = x;
+  int t2 = y;
+  assert(x >= 0);
+  assert(y >= 0);
+}
+    \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \pause
+  \begin{itemize}[<+->]
+    \item $2*2 = 4$ interference combinations
+    \item Clustering: 2 combinations
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item The second optimization we use is called clustering and also uses
+        the program dependence graph
+      \item This optimization reduces the number of possible interference
+        combinations thereby reducing the runtime of the analysis
+      \item Here we have two threads, one performing shared memory writes to
+       x and y, and the other is performing shared memory read
+      \item The two properties being analyzed are separately on x and y
+      \item Using the previously described technique, there are two possible
+        interfering stores for each of the loads in thread 2: one from thread 1
+        and one causing thread 2 to read from its own memory environment
+      \item This means that thread 2 will have to be analyzed 4 times, one for
+        each combination
+      \item However, if we look at the program, the properties being checked
+        are performed on disjoint computations 
+      \item Specifically, the writes to x and the writes to y do not influence
+        each other
+      \item So, during the analysis, the combinations between the reads of x
+        and y in thread two can be performed independently
+      \item As a result, we only need to consider the two combinations
+        independently meaning we only need to run the analysis twice for thread
+        two
+    \end{itemize}
+  }
+\end{frame}
+
 
 \end{document}
