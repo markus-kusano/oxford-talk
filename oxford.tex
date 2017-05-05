@@ -2085,7 +2085,7 @@ void thread3() {
       \item Suppose the fence in thread one is modified to a store-store memory
         barrier, that is, a synchronization operation ensuring all stores
         before the barrier have flushed to memory before any subsequent
-        operation
+        stores
       \item We would like to know the impacted statements in the program from
         this change, and to do this we need the dependency graph
     \end{itemize}
@@ -2177,6 +2177,9 @@ void thread3() {
     \item Semantically, we consider a fence to be a flush of the store-buffers
       of a thread, so, it acts as a write to all variables ocurring before the
       fence
+    \item These semantics do not map to a flow-insensitive dependency analysis
+      since, by definition, they involve knowing which statements ocurr before
+      or after a memory barrier.
     \item To ensure soundness, some other peculiarties have to be delt with but
     \item For the sake of time, I wont go into the details but if you're
       interested I'd be happy to offline
@@ -2370,23 +2373,23 @@ void thread3() {
   \DrawLines{in}
 
 
-  \LabelRegionVis{in}{1}{Test Generation}{<2->}
-  \LabelRegionSmallVis{in}{1}{[FSE15, ASE16]}{<2->}
+  \LabelRegion{in}{1}{Test Generation}
+  \LabelRegionSmall{in}{1}{[FSE15, ASE16]}
 
-  \LabelRegionVis{in}{2}{Bug Hunting}{<3->}
-  \LabelRegionSmallVis{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
+  \LabelRegion{in}{2}{Bug Hunting}
+  \LabelRegionSmall{in}{2}{[ASE14, PLDI15, FSE16$^2$]}
 
-  \LabelRegionVis{in}{3}{Repair}{<4->}
-  \LabelRegionSmallVis{in}{3}{[ICSE15, ISSTA15]}{<4->}
+  \LabelRegion{in}{3}{Repair}
+  \LabelRegionSmall{in}{3}{[ICSE15, ISSTA15]}
 
-  \LabelRegionVis{in}{4}{Verification}{<5->}
-  \LabelRegionSmallVis{in}{4}{[FSE16$^1$]}{<5->}
+  \LabelRegion{in}{4}{Verification}
+  \LabelRegionSmall{in}{4}{[FSE16$^1$]}
 
 
-  \node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
-  \node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  \node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
-  \node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+  \node at (-2.5cm,3.5cm) {Incremental};
+  \node at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  \node at (2cm,3.5cm) {Property Directed};
+  \node at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
 
   %\node at (1.6cm,1cm) {Test Generation};
   %\node at (4.4cm,1cm) {Bug Hunting};
