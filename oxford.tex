@@ -1233,7 +1233,7 @@
         writes and thread two only reads
       \item First, the assertion in thread two is never violated: in order to
         reach the assertion, flag must be true to enter the first branch, which
-        means that the write of x to 5 from thread one must have already
+        means that the write to x of 5 from thread one must have already
         occurred 
       \item However, prior thread-modular analyses are unable to prove this
         condition
@@ -1616,7 +1616,7 @@
       \item The gist of our technique is to explicitly test the cartesian
         product of all feasible store-to-load interferences
       \item First, we can see there are three interfering stores from thread
-        one: two on x, setting it to four and give, and one on flag
+        one: two on x, setting it to four and five, and one on flag
       \item Similarly, there are two loads in thread two: one on flag and
         another on x
       \item Next, we pair each each load with every store to the same variable.
@@ -1895,9 +1895,14 @@
 
 \begin{frame}[c]{Incremental Analysis}
   \begin{itemize}[<+->]
-    \item Given previously analyzed prgoram $P_1$ analyze new version $P_2$
+    \item Given previously analyzed program $P_1$ analyze new version $P_2$
     \item Ignore unimpacted regions 
     \item Reuse old analysis information
+    \item Challenges:
+      \begin{itemize}
+        \item Identifying impacted statements?
+        \item Integrating with thread-modular analyzer?
+      \end{itemize}
   \end{itemize}
   \note{
     \begin{itemize}
@@ -1909,308 +1914,17 @@
         can ignore regions unimpacted by the modifications
       \item Also, analysis results from the old version can be reused and
         passed to the new version
+      \item This brings several challenges which we addressed, specifically, it
+        is unclear how to identify impacted statements in the program,
+        particularly when dealing with weak-memory primitives
+      \item For example, if the user modifies, or removes a memory fence which
+        statements in the program are impacted
+      \item We needed to find an efficient way to compute this across threads
+      \item Also, it is unclear how to integrate the impacted-statement
+        information into the thread-modular analyzer in a way that
+        significantly reduces runtime
     \end{itemize}
   }
-\end{frame}
-
-\begin{frame}[fragile]{Change-Impact Analysis}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[name=ci01
-                        , numbers=left
-                        , firstnumber=1
-                        , gobble=8]
-        x = func();
-        y = otherFunc();
-        if (!x) {
-          x = -1;
-        }
-        if (!y) {
-          y = -1;
-        }
-      \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[name=ci01
-                        , numbers=left
-                        , firstnumber=1
-                        , gobble=8]
-        x = (*\textcolor{matred400}{coolFunc();}*)
-        y = otherFunc();
-        if (!x) {
-          x = -1;
-        }
-        if (!y) {
-          y = -1;
-        }
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \note{
-    \begin{itemize}
-      \item Identifying regions impacted by code modifications is done by
-        what's called a change-impact analysis
-      \item Here, we take modifications to the old program, and identify
-        regions in the new program which may be impacted by the change 
-      \item Suppose the first function called was changed from func to coolFunc
-      \item What we would like to know are the other statements in the program
-        impacted by this modifications
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Change-Impact Analysis}
-  \begin{center}
-    \only<1>{
-    \begin{tikzpicture}[node distance=1.25cm]
-      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
-      \node[thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
-      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
-      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
-      \node[thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
-      \node[thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
-
-      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
-
-      \draw[garr] (yf.east) -| ([xshift=1.5cm]ify.east);
-      \draw[garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
-
-      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
-
-      \draw[garr,>=latex,->] (ify.south) -- (yeq.north);
-    \end{tikzpicture}
-  }%only<1>
-    \only<2->{
-    \begin{tikzpicture}[node distance=1.25cm]
-      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
-      \node[opacity=0.2,thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
-      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
-      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
-      \node[opacity=0.2,thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
-      \node[opacity=0.2,thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
-
-      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
-
-      \draw[opacity=0.2,garr] (yf.east) -| ([xshift=1.5cm]ify.east);
-      \draw[opacity=0.2,garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
-
-      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
-
-      \draw[opacity=0.2,garr,>=latex,->] (ify.south) -- (yeq.north);
-    \end{tikzpicture}
-  }%only<1->
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item To do this, we first build the program dependency graph, and then
-        compute all the statements reachable from the modified statement
-      \item Specifically, this graph shows both the data and control
-        dependencies between statements
-      \item The statements reachable in the graph from the modified statements
-        are only those involving x
-      \item Now we can start to see why a change-impact analysis is useful to
-        couple with an analyzer: it can automatically reduce the number of
-        statements of interest
-    \end{itemize}
-  }
-\end{frame}
-
-
-
-\begin{frame}[fragile]{Change-Impact Analysis for Weak Memory}
-
-\begin{columns}[c]
-\begin{column}{0.5\textwidth}
-\begin{lstlisting}[language=C]
-x = y = z = 0;
-flag1 = flag2 = 0;
-void thread1() { 
-  x = 5;
-  y = 10;
-  fence;
-  flag1 = 1;
-}
-void thread2() { 
-  z = 1;
-  fence;
-  flag2 = 1;
-}
-void thread3() {
-  if (flag1)
-    assert(x + y == 15);
-  if (flag2)
-    assert(z == 1);
-}
-\end{lstlisting}
-\end{column}
-\begin{column}{0.5\textwidth}
-  \begin{onlyenv}<2->
-\begin{lstlisting}[language=C]
-x = y = z = 0;
-flag1 = flag2 = 0;
-void thread1() { 
-  x = 5;
-  y = 10;
-  (*\textcolor{red}{SSMembar;}*)
-  flag1 = 1;
-}
-void thread2() { 
-  z = 1;
-  fence;
-  flag2 = 1;
-}
-void thread3() {
-  if (flag1)
-    assert(x + y == 15);
-  if (flag2)
-    assert(z == 1);
-}
-\end{lstlisting}%
-\end{onlyenv}%
-\end{column}
-\end{columns}
-  \note{
-    \begin{itemize}
-      \item But, to the best of our knowledge no such change-impact analysis,
-        or dependency analysis, exists handling weak-memory, particularly the
-        weak-memory related statements such as fences and memory barriers
-      \item For example, consider this program where threads 1 and 2
-        synchronize with thread 3 using flag1 and flag2, respecitively.
-      \item Thread one updates the values of x and y and then sets flag1 to
-        true, and thread two updates the value of z and then sets flag2 to true
-      \item Thread 3 reads the value of x and y only if flag1 is set, and
-        similarly reads z only if flag2 is set
-      \item Suppose the fence in thread one is modified to a store-store memory
-        barrier, that is, a synchronization operation ensuring all stores
-        before the barrier have flushed to memory before any subsequent
-        stores
-      \item We would like to know the impacted statements in the program from
-        this change, and to do this we need the dependency graph
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Weak-Memory Dependency Analysis}
-%\begin{adjustbox}{totalheight=\textheight-2\baselineskip}
-  \begin{center}
-\begin{tikzpicture}
-  \tikzstyle{node}=[thread,font=\scriptsize]
-  %\tikzstyle{node}=[draw
-  %                  , fill=matorange400
-  %                  , line width=1pt
-  %                  , anchor=center
-  %                  , text centered
-  %                  , rounded corners
-  %                  , font=\scriptsize]
-  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
-  %\tikzstyle{imp}=[draw
-  %                 , line width=1pt
-  %                 , ggreen
-  %                 , anchor=center
-  %                 , text centered
-  %                 , dashed
-  %                 , rounded corners
-  %                 , font=\scriptsize]
-  \tikzstyle{may-imp}=[node, dotted]
-  \tikzstyle{mod}=[node, draw=matred400, rectangle]
-\matrix (m) [
- matrix of nodes
- , column sep=23mm
- , row sep=3mm
-, ampersand replacement=\&
-]{
-  \node [may-imp,align=center] (x5) { \texttt{x = 5}};
-  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
-%
-  \node [may-imp,align=center] (y10) { \texttt{y = 10}};
-  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
-%
-  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
-  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
-%
-  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
-  \&  \\
-};%end matrix
-  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
-  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
-  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
-  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
-
-  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
-
-  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
-  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
-
-  \draw [-latex] (y10.south) -- (fleft.north);
-  \draw [-latex] (fleft.south) -- (fl1.north);
-
-  \draw [-latex] (fl1.south) |- (if-f1.west);
-  
-  \draw [-latex] (z1) -- (fright);
-  \draw [-latex] (fright) -- (fl2);
-
-  \draw [-latex] (fl2) |- (if-f2);
-
-  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
-  \draw (fright.east) -- ([xshift=4mm]fright.east);
-
-  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
-  \draw (z1.east) -- ([xshift=4mm] z1.east);
-  
-  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
-  \draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
-
-  \draw [-latex] (if-f1) -- (as1);
-  \draw [-latex] (if-f2) -- (as2);
-
-\end{tikzpicture}
-%\end{adjustbox}
-\end{center}
-\note{
-  \begin{itemize}
-    \item To reason about dependencies involving weak-memory primitives we use
-      what we call a semi flow-insensitive analysis: we perform the dependency
-      analysis in a flow insensitive way except for with regards to fences and
-      memory barriers
-    \item Semantically, we consider a fence to be a flush of the store-buffers
-      of a thread, so, it acts as a write to all variables ocurring before the
-      fence
-    \item These semantics do not map to a flow-insensitive dependency analysis
-      since, by definition, they involve knowing which statements ocurr before
-      or after a memory barrier.
-    \item To ensure soundness, some other peculiarties have to be delt with but
-    \item For the sake of time, I wont go into the details but if you're
-      interested I'd be happy to offline
-    \item But, given the weak-memory aware dependency analysis we are able to
-      formulate a change-impact analysis sound under weak-memory
-  \end{itemize}
-}
-\end{frame}
-
-\begin{frame}{Incremental Thread-Modular Analysis}
-  \begin{itemize}[<+->]
-    \item May be impacted
-    \item May impact
-    \item Preserve analysis results
-    \item Ignore transfer functions
-  \end{itemize}
-  \note{
-    \begin{itemize} 
-      \item Very briefly, I'll go over how we created an incremental
-        thread-modular analyzer
-      \item We make use of two types of impact information: the first, as we
-        saw before, are identifying statements in the program which may-be
-        impacted by the change
-      \item The second, are statements which may-impact impacted statements
-      \item Using this information we are able to preserve analysis results
-        from the old program version, as well as ignore the transfer functions
-        of many statements
-      \item This causes the analysis to converge much faster and thus reduce
-        runtime
-    \end{itemize} 
-  } 
 \end{frame}
 
 
@@ -2242,93 +1956,17 @@ void thread3() {
   \end{itemize}
   \note{
     \begin{itemize}
-      \item First, here are the results of our tool testing sequentially
-        consistent programs.
+      \item Here are the results of our tool testing sequentially consistent
+        programs.
       \item We ran our tool on 38 C programs and compared it against Mine's
         non-constraint based thread-modular analyzer
+      \item The benchmarks consisted of programs we created as well as linux
+        device drivers
       \item His approach was able to verify 38 properties in 154 seconds,
-        whereas our tool verified 1,078 properties in 480 seconds
-      \item This is a total of 28 more verified properties with a 3x increase
+        whereas our tool, with all it's optimizations, verified 1,078
+        properties in 480 seconds
+      \item This is a total of 28x more verified properties with a 3x increase
         in runtime
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
-  \begin{itemize}[<+->]
-    \item 52 C programs (device drivers), litmus tests
-    \item Compared to Min\`{e}
-      \begin{itemize}
-        \item 1752 verified properties
-        \item 415s
-      \end{itemize}
-    \item Compared to Duet [Farzan and Kincaid, POPL 2012]
-      \begin{itemize}
-        \item 2432 verified properties
-        \item 106s
-      \end{itemize}
-    \item Our new method
-      \begin{itemize}
-        \item 4577 verified properties
-        \item 5387s
-      \end{itemize}
-    \item 12--50x runtime increase
-    \item 1.8--2.6x increase in verified properties
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Next, we evaluated our approach sound under TSO, PSO and RMO
-      \item We again compared against Mine, and also a tool by Farzan and
-        Kincaid called Duet
-      \item We tested on 52 C programs as well as a large selection of Litmus
-        tests
-      \item Mine was able to verify 1752 properties in 415 seconds, Duet 2432
-        properties in 106 seconds, and our tool verified 4577 properties in
-        5387 seconds
-      \item This is a 12--50x increase in runtime for a 1.8--2.6x increase in
-        the number of verified properties
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
-  \begin{itemize}[<+->]
-      \item Average 57\% of program impacted by modifications
-      \item Ranging from 1.5\%--92\%
-      \item Min\'{e}
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 1263 seconds
-        \end{itemize}
-      \item Incremental w/o constraints
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 748 seconds
-        \end{itemize}
-      \item Non-incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 14,389 seconds
-        \end{itemize}
-      \item Incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 2642 seconds
-        \end{itemize}
-    \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Finally, here are the results for our incremental analyzer. We
-        compared again to Min\'{e} and implemented an incremental version of
-        both his algorithm, as well as our constaint-based analyzer
-      \item Our test set had 57\% of the program impacted on average, ranging
-        from 1.5 to 92 percent.
-      \item First, his approach verified 6384 properties in 1,263 seconds,
-        whereas our incremental version verified the same number of properties
-        in 748 seconds, about a 1.7x speedup
-      \item Second, the constraint based approach took 14,000 seconds to verify
-        11,458 properties, whereas our incremental version took only 2642
-        seconds to verify the same number of properties, about a 5.4x speedup
     \end{itemize}
   }
 \end{frame}
@@ -2344,9 +1982,10 @@ void thread3() {
     \begin{itemize}
       \item So, in conclusion I presented a constraint-based thread-modular
         abstract interpretation algorithm
-      \item I introduced how it can be extended to handle TSO, PSO, and RMO
-      \item Also, I showed the intuition behind a weak-memory aware
-        change-impact analysis, and a incremental thread-modular analyzer
+      \item I showed future work extending it to soundly handle TSO, PSO, and
+        RMO
+      \item And also I showed the intuition behind making the analysis
+        incremental
     \end{itemize}
   }
 \end{frame}
@@ -2705,5 +2344,383 @@ void thread2() {
   }
 \end{frame}
 
+\begin{frame}[fragile]{Change-Impact Analysis}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[name=ci01
+                        , numbers=left
+                        , firstnumber=1
+                        , gobble=8]
+        x = func();
+        y = otherFunc();
+        if (!x) {
+          x = -1;
+        }
+        if (!y) {
+          y = -1;
+        }
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[name=ci01
+                        , numbers=left
+                        , firstnumber=1
+                        , gobble=8]
+        x = (*\textcolor{matred400}{coolFunc();}*)
+        y = otherFunc();
+        if (!x) {
+          x = -1;
+        }
+        if (!y) {
+          y = -1;
+        }
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item Identifying regions impacted by code modifications is done by
+        what's called a change-impact analysis
+      \item Here, we take modifications to the old program, and identify
+        regions in the new program which may be impacted by the change 
+      \item Suppose the first function called was changed from func to coolFunc
+      \item What we would like to know are the other statements in the program
+        impacted by this modifications
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Change-Impact Analysis}
+  \begin{center}
+    \only<1>{
+    \begin{tikzpicture}[node distance=1.25cm]
+      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
+      \node[thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
+      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
+      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
+      \node[thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
+      \node[thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
+
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
+
+      \draw[garr] (yf.east) -| ([xshift=1.5cm]ify.east);
+      \draw[garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
+
+      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
+
+      \draw[garr,>=latex,->] (ify.south) -- (yeq.north);
+    \end{tikzpicture}
+  }%only<1>
+    \only<2->{
+    \begin{tikzpicture}[node distance=1.25cm]
+      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
+      \node[opacity=0.2,thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
+      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
+      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
+      \node[opacity=0.2,thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
+      \node[opacity=0.2,thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
+
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
+
+      \draw[opacity=0.2,garr] (yf.east) -| ([xshift=1.5cm]ify.east);
+      \draw[opacity=0.2,garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
+
+      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
+
+      \draw[opacity=0.2,garr,>=latex,->] (ify.south) -- (yeq.north);
+    \end{tikzpicture}
+  }%only<1->
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item To do this, we first build the program dependency graph, and then
+        compute all the statements reachable from the modified statement
+      \item Specifically, this graph shows both the data and control
+        dependencies between statements
+      \item The statements reachable in the graph from the modified statements
+        are only those involving x
+      \item Now we can start to see why a change-impact analysis is useful to
+        couple with an analyzer: it can automatically reduce the number of
+        statements of interest
+    \end{itemize}
+  }
+\end{frame}
+
+
+
+\begin{frame}[fragile]{Change-Impact Analysis for Weak Memory}
+
+\begin{columns}[c]
+\begin{column}{0.5\textwidth}
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  fence;
+  flag1 = 1;
+}
+void thread2() { 
+  z = 1;
+  fence;
+  flag2 = 1;
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+  if (flag2)
+    assert(z == 1);
+}
+\end{lstlisting}
+\end{column}
+\begin{column}{0.5\textwidth}
+  \begin{onlyenv}<2->
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  (*\textcolor{red}{SSMembar;}*)
+  flag1 = 1;
+}
+void thread2() { 
+  z = 1;
+  fence;
+  flag2 = 1;
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+  if (flag2)
+    assert(z == 1);
+}
+\end{lstlisting}%
+\end{onlyenv}%
+\end{column}
+\end{columns}
+  \note{
+    \begin{itemize}
+      \item But, to the best of our knowledge no such change-impact analysis,
+        or dependency analysis, exists handling weak-memory, particularly the
+        weak-memory related statements such as fences and memory barriers
+      \item For example, consider this program where threads 1 and 2
+        synchronize with thread 3 using flag1 and flag2, respecitively.
+      \item Thread one updates the values of x and y and then sets flag1 to
+        true, and thread two updates the value of z and then sets flag2 to true
+      \item Thread 3 reads the value of x and y only if flag1 is set, and
+        similarly reads z only if flag2 is set
+      \item Suppose the fence in thread one is modified to a store-store memory
+        barrier, that is, a synchronization operation ensuring all stores
+        before the barrier have flushed to memory before any subsequent
+        stores
+      \item We would like to know the impacted statements in the program from
+        this change, and to do this we need the dependency graph
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Weak-Memory Dependency Analysis}
+%\begin{adjustbox}{totalheight=\textheight-2\baselineskip}
+  \begin{center}
+\begin{tikzpicture}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [may-imp,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [may-imp,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
+
+  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
+
+  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+
+  \draw [-latex] (y10.south) -- (fleft.north);
+  \draw [-latex] (fleft.south) -- (fl1.north);
+
+  \draw [-latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [-latex] (z1) -- (fright);
+  \draw [-latex] (fright) -- (fl2);
+
+  \draw [-latex] (fl2) |- (if-f2);
+
+  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw (fright.east) -- ([xshift=4mm]fright.east);
+
+  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw (z1.east) -- ([xshift=4mm] z1.east);
+  
+  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
+  \draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+
+  \draw [-latex] (if-f1) -- (as1);
+  \draw [-latex] (if-f2) -- (as2);
+
+\end{tikzpicture}
+%\end{adjustbox}
+\end{center}
+\note{
+  \begin{itemize}
+    \item To reason about dependencies involving weak-memory primitives we use
+      what we call a semi flow-insensitive analysis: we perform the dependency
+      analysis in a flow insensitive way except for with regards to fences and
+      memory barriers
+    \item Semantically, we consider a fence to be a flush of the store-buffers
+      of a thread, so, it acts as a write to all variables ocurring before the
+      fence
+    \item These semantics do not map to a flow-insensitive dependency analysis
+      since, by definition, they involve knowing which statements ocurr before
+      or after a memory barrier.
+    \item To ensure soundness, some other peculiarties have to be delt with but
+    \item For the sake of time, I wont go into the details but if you're
+      interested I'd be happy to offline
+    \item But, given the weak-memory aware dependency analysis we are able to
+      formulate a change-impact analysis sound under weak-memory
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}{Incremental Thread-Modular Analysis}
+  \begin{itemize}[<+->]
+    \item May be impacted
+    \item May impact
+    \item Preserve analysis results
+    \item Ignore transfer functions
+  \end{itemize}
+  \note{
+    \begin{itemize} 
+      \item Very briefly, I'll go over how we created an incremental
+        thread-modular analyzer
+      \item We make use of two types of impact information: the first, as we
+        saw before, are identifying statements in the program which may-be
+        impacted by the change
+      \item The second, are statements which may-impact impacted statements
+      \item Using this information we are able to preserve analysis results
+        from the old program version, as well as ignore the transfer functions
+        of many statements
+      \item This causes the analysis to converge much faster and thus reduce
+        runtime
+    \end{itemize} 
+  } 
+\end{frame}
+
+\begin{frame}{Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+    \item 52 C programs (device drivers), litmus tests
+    \item Compared to Min\`{e}
+      \begin{itemize}
+        \item 1752 verified properties
+        \item 415s
+      \end{itemize}
+    \item Compared to Duet [Farzan and Kincaid, POPL 2012]
+      \begin{itemize}
+        \item 2432 verified properties
+        \item 106s
+      \end{itemize}
+    \item Our new method
+      \begin{itemize}
+        \item 4577 verified properties
+        \item 5387s
+      \end{itemize}
+    \item 12--50x runtime increase
+    \item 1.8--2.6x increase in verified properties
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Next, we evaluated our approach sound under TSO, PSO and RMO
+      \item We again compared against Mine, and also a tool by Farzan and
+        Kincaid called Duet
+      \item We tested on 52 C programs as well as a large selection of Litmus
+        tests
+      \item Mine was able to verify 1752 properties in 415 seconds, Duet 2432
+        properties in 106 seconds, and our tool verified 4577 properties in
+        5387 seconds
+      \item This is a 12--50x increase in runtime for a 1.8--2.6x increase in
+        the number of verified properties
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+      \item Average 57\% of program impacted by modifications
+      \item Ranging from 1.5\%--92\%
+      \item Min\'{e}
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 1263 seconds
+        \end{itemize}
+      \item Incremental w/o constraints
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 748 seconds
+        \end{itemize}
+      \item Non-incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 14,389 seconds
+        \end{itemize}
+      \item Incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 2642 seconds
+        \end{itemize}
+    \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Finally, here are the results for our incremental analyzer. We
+        compared again to Min\'{e} and implemented an incremental version of
+        both his algorithm, as well as our constaint-based analyzer
+      \item Our test set had 57\% of the program impacted on average, ranging
+        from 1.5 to 92 percent.
+      \item First, his approach verified 6384 properties in 1,263 seconds,
+        whereas our incremental version verified the same number of properties
+        in 748 seconds, about a 1.7x speedup
+      \item Second, the constraint based approach took 14,000 seconds to verify
+        11,458 properties, whereas our incremental version took only 2642
+        seconds to verify the same number of properties, about a 5.4x speedup
+    \end{itemize}
+  }
+\end{frame}
 
 \end{document}
