@@ -18,3 +18,7 @@ read:
 
 clean:
 	rm -f $(basename $(SOURCE)).{pdf,aux,log,bbl,blg,lof,lot,toc}
+
+pres:
+	/home/markus/src/dspdfviewer/dspdfviewer $(SOURCE).pdf
+
