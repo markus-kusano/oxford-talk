@@ -276,16 +276,16 @@
 % #4 is the frame on which the label is visible
 \newcommand\LabelRegionVis[4]{%
 \ifnum#2=1\relax
-\node[visible on=#4] at ( $ (#1.north west)!0.5!(#1.center) $ ) {#3};
+\node[align=center, visible on=#4] at ( $ (#1.north west)!0.5!(#1.center) $ ) {#3};
 \else
 \ifnum#2=2\relax
-\node[visible on=#4] at ( $ (#1.north east)!0.5!(#1.center) $ ) {#3};
+\node[align=center, visible on=#4] at ( $ (#1.north east)!0.5!(#1.center) $ ) {#3};
 \else
 \ifnum#2=3\relax
-\node[visible on=#4] at ( $ (#1.south west)!0.5!(#1.center) $ ) {#3};
+\node[align=center, visible on=#4] at ( $ (#1.south west)!0.5!(#1.center) $ ) {#3};
 \else
 \ifnum#2=4\relax
-\node[visible on=#4] at ( $ (#1.south east)!0.5!(#1.center) $ ) {#3};
+\node[align=center, visible on=#4] at ( $ (#1.south east)!0.5!(#1.center) $ ) {#3};
 \fi\fi\fi\fi%
 }
 
@@ -321,16 +321,16 @@
 
 \newcommand\LabelRegionSmallVis[4]{%
 \ifnum#2=1\relax
-\node[visible on=#4, yshift=-0.5cm] at ( $ (#1.north west)!0.5!(#1.center) $ ) {\tiny#3};
+\node[visible on=#4, yshift=-1.5cm] at ( $ (#1.north west)!0.5!(#1.center) $ ) {\tiny#3};
 \else
 \ifnum#2=2\relax
-\node[visible on=#4, yshift=-0.5cm] at ( $ (#1.north east)!0.5!(#1.center) $ ) {\tiny#3};
+\node[visible on=#4, yshift=-1.5cm] at ( $ (#1.north east)!0.5!(#1.center) $ ) {\tiny#3};
 \else
 \ifnum#2=3\relax
-\node[visible on=#4, yshift=-0.5cm] at ( $ (#1.south west)!0.5!(#1.center) $ ) {\tiny#3};
+\node[visible on=#4, yshift=-1.5cm] at ( $ (#1.south west)!0.5!(#1.center) $ ) {\tiny#3};
 \else
 \ifnum#2=4\relax
-\node[visible on=#4, yshift=-0.5cm] at ( $ (#1.south east)!0.5!(#1.center) $ ) {\tiny#3};
+\node[visible on=#4, yshift=-1.5cm] at ( $ (#1.south east)!0.5!(#1.center) $ ) {\tiny#3};
 \fi\fi\fi\fi%
 }
 
@@ -840,137 +840,6 @@
   }
 \end{frame}
 
-
-\begin{frame}[fragile,t]
-
-\begin{center}
-\begin{tikzpicture}
-  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
-  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
-
-  \DrawSquare{5.5cm}{in}
-  \DrawSquare{8cm}{out}
-  \FillSquare{out}{1}{matorange400}
-  \FillSquare{out}{2}{matorange400}
-  \FillSquare{out}{3}{matorange400}
-  \FillSquare{out}{4}{matorange400}
-
-  \FillSquare{in}{1}{matyellow400}
-  \FillSquare{in}{2}{matyellow400}
-  \FillSquare{in}{3}{matyellow400}
-  \FillSquare{in}{4}{matyellow400}
-
-  \DrawLines{in}
-
-
-  \LabelRegionVis{in}{1}{Test Generation}{<2->}
-  \LabelRegionSmallVis{in}{1}{[FSE15, ASE16]}{<2->}
-
-  \LabelRegionVis{in}{2}{Bug Hunting}{<3->}
-  \LabelRegionSmallVis{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
-
-  \LabelRegionVis{in}{3}{Repair}{<4->}
-  \LabelRegionSmallVis{in}{3}{[ICSE15, ISSTA15]}{<4->}
-
-  \LabelRegionVis{in}{4}{Verification}{<5->}
-  \LabelRegionSmallVis{in}{4}{[FSE16$^1$, FSE17, ASE17]}{<5->}
-
-
-  \node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
-  \node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  \node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
-  \node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
-
-  %\node at (1.6cm,1cm) {Test Generation};
-  %\node at (4.4cm,1cm) {Bug Hunting};
-  %\node at (1.6cm,-1cm) {Program Repair};
-  %\node at (4.4cm,-1cm) {Verification};
-\end{tikzpicture}
-\end{center}
-
-\note{
-  \begin{itemize}
-    \item In summary, my work addresses these issues surrounding concurrent
-      programs in order to aide in their development using many different
-      techniques
-    \item First I have work on generating test inputs for a program, using
-      techniques such as symbolic execution, where test inputs could be
-      concrete inputs to pass to a program, or new thread schedules to explore.
-      Here the goal could be to increase code coverage or find bugs
-    \item Second, is work specificly tailored to bug hunting using techniques
-      such as model checking, where we would like to find test inputs, again
-      either concrete inputs or thread schedules, causing a property to be
-    violated. 
-  \item Third, are works focusing on automated program repair,
-      using techniques such as program synthesis, in order to automatically
-      make modifications to a program, or automatically deduce information
-      useful to a programmer
-    \item Fourth and finally I focus on verification via abstract interpretation in order to automatically generate proofs of correctness of arbitrary programs.
-    \item Surrounding all of these techniques are a focus on making analyses
-      either incremental, or property directed. Both of these approaches aim to
-      reduce the scope of the analysis, thereby increasing efficiency, 
-  \end{itemize}
-}
-
-\end{frame}
-
-\begin{frame}[fragile,t]
-
-\begin{center}
-\begin{tikzpicture}
-  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
-  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
-
-  \DrawSquareOpac{5.5cm}{in}
-  \DrawSquareOpac{8cm}{out}
-  \FillSquareOpac{out}{1}{matorange400}
-  \FillSquareOpac{out}{2}{matorange400}
-  \FillSquareOpac{out}{3}{matorange400}
-  \FillSquareOpac{out}{4}{matorange400}
-
-  \FillSquareOpac{in}{1}{matyellow400}
-  \FillSquareOpac{in}{2}{matyellow400}
-  \FillSquareOpac{in}{3}{matyellow400}
-  \FillSquare{in}{4}{matyellow400}
-
-  \DrawLines{in}
-
-
-  \LabelRegionOpac{in}{1}{Test Generation}{<2->}
-  \LabelRegionSmallOpac{in}{1}{[FSE15, ASE16]}{<2->}
-
-  \LabelRegionOpac{in}{2}{Bug Hunting}{<3->}
-  \LabelRegionSmallOpac{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
-
-  \LabelRegionOpac{in}{3}{Repair}{<4->}
-  \LabelRegionSmallOpac{in}{3}{[ICSE15, ISSTA15]}{<4->}
-
-  \LabelRegion{in}{4}{Verification}{<5->}
-  \LabelRegionSmall{in}{4}{[FSE16$^1$, FSE17, ASE17]}{<5->}
-
-
-  \node[opacity=0.2] at (-2.5cm,3.5cm) {Incremental};
-  \node[opacity=0.2] at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  \node[opacity=0.2] at (2cm,3.5cm) {Property Directed};
-  \node[opacity=0.2] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
-
-  %\node at (1.6cm,1cm) {Test Generation};
-  %\node at (4.4cm,1cm) {Bug Hunting};
-  %\node at (1.6cm,-1cm) {Program Repair};
-  %\node at (4.4cm,-1cm) {Verification};
-\end{tikzpicture}
-\end{center}
-
-\note{
-  \begin{itemize}
-    \item In this talk today, and in my dissertation proposal, I'll focus on my
-      current work on numerical verification, as well as the proposed ideas for
-      future work.
-  \end{itemize}
-}
-
-\end{frame}
-
 \begin{frame}[c]{Proposed Research}
   \begin{itemize}[<+->]
     \item Verifying Concurrent Programs:
@@ -985,7 +854,7 @@
   \vspace{1em}
   \begin{center}
     \huge
-    \textbf{Incremental} Thread-Modular Static Verification for \textbf{Strong} and \textbf{Weak} Memory
+    Incremental Thread-Modular Static Verification for Strong and Weak Memory
   \end{center}
   \note{
     \begin{itemize}
@@ -999,6 +868,111 @@
   }
 \end{frame}
 
+
+\begin{frame}[c]
+  \begin{center}
+\begin{tikzpicture}
+  \draw[fill=matorange400] (-5,-2) rectangle (5,0) node[pos=0.5, visible
+  on=<4->] {Incremental
+  Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-4.5) rectangle (5,-2.5) node[pos=0.5, visible
+  on=<3->] {Weak
+  Memory Aware Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-7) rectangle (5,-5) node[pos=0.5, visible
+  on=<2->] {Constraint
+  Based Static Analysis};
+\end{tikzpicture}
+  \end{center}
+
+  \note{
+    \begin{itemize}
+      \item We answer these research questions in three steps, each building
+        upon the next
+      \item My dissertation will address these issues surrounding writing
+        correct concurrent code by contributing three novel techniques each
+        building upon the next.
+      \item First, I show how a constraint sovler can be coupled with a numeric
+        abstract interpreter to form a new kind of static analysis of
+        concurrent progrmas
+      \item Second, I show how this new analysis can be designed to acurratley
+        analyze weak memory models
+      \item And third, I show how this new weak-memory aware analysis can be
+        made incremental.
+      \item We've made significant progress already towards these goals, with
+        the first two parts already published.
+    \end{itemize}
+  }
+\end{frame}
+
+%\begin{frame}
+%  CI
+%  MC
+%  TM MM OB
+%  Non Modular
+%\end{frame}
+
+\begin{frame}[fragile,t]
+
+\begin{center}
+\begin{tikzpicture}
+  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+
+  \DrawSquare{8.0cm}{in}
+  %\DrawSquare{8cm}{out}
+
+  \FillSquare{in}{1}{matorange400}
+  \FillSquare{in}{2}{matorange400}
+  \FillSquare{in}{3}{matorange400}
+  \FillSquare{in}{4}{matorange400}
+
+  \DrawLines{in}
+
+
+  \LabelRegionVis{in}{1}{Bounded Model\\Checking}{<2->}
+  \LabelRegionSmallVis{in}{1}{[Alglave et al, CAV '13]}{<2->}
+
+  \LabelRegionVis{in}{2}{Memory Model Oblvious\\Thread Modular\\Static Analysis}{<3->}
+  \LabelRegionSmallVis{in}{2}{[Min\'{e}, VMCAI '14]}{<3->}
+
+  \LabelRegionVis{in}{3}{Non Modular\\Static Analysis}{<4->}
+  \LabelRegionSmallVis{in}{3}{[Dan et al,  VMCAI '15]}{<4->}
+
+  \LabelRegionVis{in}{4}{Incremental for SC}{<5->}
+  \LabelRegionSmallVis{in}{4}{[Guo et al, FSE '15]}{<5->}
+
+
+  %\node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
+  %\node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  %\node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
+  %\node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+
+  %\node at (1.6cm,1cm) {Test Generation};
+  %\node at (4.4cm,1cm) {Bug Hunting};
+  %\node at (1.6cm,-1cm) {Program Repair};
+  %\node at (4.4cm,-1cm) {Verification};
+\end{tikzpicture}
+\end{center}
+
+\note{
+  \begin{itemize}
+    \item We fill in the gaps and build on prior work in the following ways
+    \item First, compared to prior work on bounded model checking, which
+      attempts to find bugs in programs, we instead verify the absense of bugs,
+      even in potentially infinite programs
+    \item Second, prior thread-modular analyses are so called memory-model
+      oblivious: these analyses are unaware of the underlying memory model and
+      often admit incuarracies by assuming the memory model is too weak
+    \item Third, are static verification techniques which are non-thread
+      modular: these are inscalable due to their explicit enumeration of all
+      thread schedules
+    \item And fourth, are prior incremental analyses for concurrent programs:
+      these only handled sequentially consistent programs, and are unable to
+      model weak-memory concurrent programs.
+  \end{itemize}
+}
+\end{frame}
+
 \section{Background}
 
 \begin{frame}{Overview}
@@ -1008,6 +982,141 @@
   provide some background necessary to understand my contributions.
 }
 \end{frame}
+
+
+%\begin{frame}[fragile,t]
+%
+%\begin{center}
+%\begin{tikzpicture}
+%  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+%  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+%
+%  \DrawSquare{5.5cm}{in}
+%  \DrawSquare{8cm}{out}
+%  \FillSquare{out}{1}{matorange400}
+%  \FillSquare{out}{2}{matorange400}
+%  \FillSquare{out}{3}{matorange400}
+%  \FillSquare{out}{4}{matorange400}
+%
+%  \FillSquare{in}{1}{matyellow400}
+%  \FillSquare{in}{2}{matyellow400}
+%  \FillSquare{in}{3}{matyellow400}
+%  \FillSquare{in}{4}{matyellow400}
+%
+%  \DrawLines{in}
+%
+%
+%  \LabelRegionVis{in}{1}{Test Generation}{<2->}
+%  \LabelRegionSmallVis{in}{1}{[FSE15, ASE16]}{<2->}
+%
+%  \LabelRegionVis{in}{2}{Bug Hunting}{<3->}
+%  \LabelRegionSmallVis{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
+%
+%  \LabelRegionVis{in}{3}{Repair}{<4->}
+%  \LabelRegionSmallVis{in}{3}{[ICSE15, ISSTA15]}{<4->}
+%
+%  \LabelRegionVis{in}{4}{Verification}{<5->}
+%  \LabelRegionSmallVis{in}{4}{[FSE16$^1$, FSE17, ASE17]}{<5->}
+%
+%
+%  \node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
+%  \node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+%  \node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
+%  \node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+%
+%  %\node at (1.6cm,1cm) {Test Generation};
+%  %\node at (4.4cm,1cm) {Bug Hunting};
+%  %\node at (1.6cm,-1cm) {Program Repair};
+%  %\node at (4.4cm,-1cm) {Verification};
+%\end{tikzpicture}
+%\end{center}
+%
+%\note{
+%  \begin{itemize}
+%    \item In summary, my work addresses these issues surrounding concurrent
+%      programs in order to aide in their development using many different
+%      techniques
+%    \item First I have work on generating test inputs for a program, using
+%      techniques such as symbolic execution, where test inputs could be
+%      concrete inputs to pass to a program, or new thread schedules to explore.
+%      Here the goal could be to increase code coverage or find bugs
+%    \item Second, is work specificly tailored to bug hunting using techniques
+%      such as model checking, where we would like to find test inputs, again
+%      either concrete inputs or thread schedules, causing a property to be
+%    violated. 
+%  \item Third, are works focusing on automated program repair,
+%      using techniques such as program synthesis, in order to automatically
+%      make modifications to a program, or automatically deduce information
+%      useful to a programmer
+%    \item Fourth and finally I focus on verification via abstract interpretation in order to automatically generate proofs of correctness of arbitrary programs.
+%    \item Surrounding all of these techniques are a focus on making analyses
+%      either incremental, or property directed. Both of these approaches aim to
+%      reduce the scope of the analysis, thereby increasing efficiency, 
+%  \end{itemize}
+%}
+%
+%\end{frame}
+%
+%\begin{frame}[fragile,t]
+%
+%\begin{center}
+%\begin{tikzpicture}
+%  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+%  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+%
+%  \DrawSquareOpac{5.5cm}{in}
+%  \DrawSquareOpac{8cm}{out}
+%  \FillSquareOpac{out}{1}{matorange400}
+%  \FillSquareOpac{out}{2}{matorange400}
+%  \FillSquareOpac{out}{3}{matorange400}
+%  \FillSquareOpac{out}{4}{matorange400}
+%
+%  \FillSquareOpac{in}{1}{matyellow400}
+%  \FillSquareOpac{in}{2}{matyellow400}
+%  \FillSquareOpac{in}{3}{matyellow400}
+%  \FillSquare{in}{4}{matyellow400}
+%
+%  \DrawLines{in}
+%
+%
+%  \LabelRegionOpac{in}{1}{Test Generation}{<2->}
+%  \LabelRegionSmallOpac{in}{1}{[FSE15, ASE16]}{<2->}
+%
+%  \LabelRegionOpac{in}{2}{Bug Hunting}{<3->}
+%  \LabelRegionSmallOpac{in}{2}{[ASE14, PLDI15, FSE16$^2$]}{<3->}
+%
+%  \LabelRegionOpac{in}{3}{Repair}{<4->}
+%  \LabelRegionSmallOpac{in}{3}{[ICSE15, ISSTA15]}{<4->}
+%
+%  \LabelRegion{in}{4}{Verification}{<5->}
+%  \LabelRegionSmall{in}{4}{[FSE16$^1$, FSE17, ASE17]}{<5->}
+%
+%
+%  \node[opacity=0.2] at (-2.5cm,3.5cm) {Incremental};
+%  \node[opacity=0.2] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+%  \node[opacity=0.2] at (2cm,3.5cm) {Property Directed};
+%  \node[opacity=0.2] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+%
+%  %\node at (1.6cm,1cm) {Test Generation};
+%  %\node at (4.4cm,1cm) {Bug Hunting};
+%  %\node at (1.6cm,-1cm) {Program Repair};
+%  %\node at (4.4cm,-1cm) {Verification};
+%\end{tikzpicture}
+%\end{center}
+%
+%\note{
+%  \begin{itemize}
+%    \item In this talk today, and in my dissertation proposal, I'll focus on my
+%      current work on numerical verification, as well as the proposed ideas for
+%      future work.
+%  \end{itemize}
+%}
+%
+%\end{frame}
+%
+%
+%\section{Background}
+%
 
 \begin{frame}[fragile]{Numerical Abstract Interpretation}
   \begin{columns}
@@ -1482,7 +1591,7 @@
   }
 \end{frame}
 
-\section{Flow-sensitive Thread Modular Abstract Interpretation [FSE16]}
+\section{Flow-sensitive Thread Modular Abstract Interpretation}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection,currentsubsection]
@@ -1886,7 +1995,7 @@
 \end{frame}
 
 
-\section{Thread Modular Analysis for Weak Memory [FSE17]}
+\section{Thread Modular Analysis for Weak Memory}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection]
@@ -2074,7 +2183,7 @@
   }
 \end{frame}
 
-\section{Incremental Thread Modular Analysis [Future Work]}
+\section{Incremental Thread Modular Analysis}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection]
@@ -2432,6 +2541,8 @@ void thread3() {
 %}
 %\end{frame}
 
+\section{Conclusion}
+
 \begin{frame}{Conclusion}
   \begin{itemize}[<+->]
     \item Constraint-Based Thread-Modular Abstract Interpretation
@@ -2445,10 +2556,14 @@ void thread3() {
       \item Then, I showed how we created a weak-memory aware analyzer for TSO, PSO, and RMO.
       \item And finally, I showed how we propose to make the analysis
         incremental by designing a weak-memory aware change-impact analysis.
+      \item With that I'll take any questions
     \end{itemize}
   }
 \end{frame}
 
+
+%%%%%%% Backup slides
+\appendix
 \begin{frame}
 
 \begin{center}
@@ -2502,9 +2617,6 @@ void thread3() {
   }
 \end{frame}
 
-
-%%%%%%% Backup slides
-\appendix
 \begin{frame}{Soundness}
   \begin{itemize}
     \item<1-> As sound as underlying sequential abstract interpreter
