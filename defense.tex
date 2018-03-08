@@ -474,7 +474,7 @@
 \title[Constraint AI]{Constraint-Based Thread-Modular Abstract Interpretation}
 \author[Kusano]{Markus Kusano}
 \institute{Virginia Tech, ECE Department}
-\date{May 16, 2017}
+\date{April 23rd, 2018}
 
 \begin{frame}
   \maketitle
@@ -840,7 +840,7 @@
   }
 \end{frame}
 
-\begin{frame}[c]{Proposed Research}
+\begin{frame}[c]{Completed Research}
   \begin{itemize}[<+->]
     \item Verifying Concurrent Programs:
   \begin{itemize}
@@ -858,48 +858,26 @@
   \end{center}
   \note{
     \begin{itemize}
-      \item To sum up, my dissertation will address the following open research questions within the area of verifying the correctness of concurrent programs
-      \item First, we'd like to efficiently perform the verification without an explicit enumeration of all schedules
-      \item But, while we'd like to be efficient, we also want to be able to verify properties across threads with reasonable acurracty
-      \item We also want to be practical: our analysis should be able to reason about programs running on real processors
-      \item And finally, we want our analysis to be incremental: if the user makes a small change to their program, the analysis should quickly analyze only the parts relevant to the change.
-      \item So, overall, my dissertation will create the first Incremental Thread-Modular Static Verifier for both Strong and Weak Memory.
+      \item In summary, my dissertation addresses the following open research
+        questions within the area of verifying the correctness of concurrent
+        programs
+      \item First, we'd like to efficiently perform the verification without an
+        explicit enumeration of all schedules
+      \item But, while we'd like to be efficient, we also want to be able to
+        verify properties across threads with reasonable acurracty
+      \item We also want to be practical: our analysis should be able to reason
+        about programs running on real processors
+      \item And finally, we wanted our analysis to be incremental: if the user
+        makes a small change to their program, the analysis should quickly
+        analyze only the parts relevant to the change.
+      \item So, overall, my dissertation created the first Incremental
+        Thread-Modular Static Verifier for both Strong and Weak Memory.
     \end{itemize}
   }
 \end{frame}
 
 
-\begin{frame}[c]
-  \begin{center}
-\begin{tikzpicture}
-  \draw[fill=matorange400] (-5,-2) rectangle (5,0) node[pos=0.5, visible
-  on=<4->] {Incremental
-  Constraint Based Static Analysis};
-  \draw[fill=matorange400] (-5,-4.5) rectangle (5,-2.5) node[pos=0.5, visible
-  on=<3->] {Weak
-  Memory Aware Constraint Based Static Analysis};
-  \draw[fill=matorange400] (-5,-7) rectangle (5,-5) node[pos=0.5, visible
-  on=<2->] {Constraint
-  Based Static Analysis};
-\end{tikzpicture}
-  \end{center}
 
-  \note{
-    \begin{itemize}
-      \item We answer these research questions in three steps, each building
-        upon the next
-      \item First, I show how a constraint sovler can be coupled with a numeric
-        abstract interpreter to form a new kind of static analysis of
-        concurrent progrmas
-      \item Second, I show how this new analysis can be designed to acurratley
-        analyze weak memory models
-      \item And third, I show how this new weak-memory aware analysis can be
-        made incremental.
-      \item We've made significant progress already towards these goals, with
-        the first two parts already published.
-    \end{itemize}
-  }
-\end{frame}
 
 %\begin{frame}
 %  CI
@@ -908,67 +886,302 @@
 %  Non Modular
 %\end{frame}
 
-\begin{frame}[fragile,t]
+\section{Motivating Example}
 
-\begin{center}
+\begin{frame}{Overview}
+  \tableofcontents[currentsection,currentsubsection]
+\note {
+  Now that I've gone over a recap of my entire dissertation, I'll go over
+  examples motiviating the last chapter on the incremental analysis.
+}
+\end{frame}
+
+
+\begin{frame}[fragile]{Change-Impact Analysis for Weak Memory}
+
+\begin{columns}[c]
+\begin{column}{0.5\textwidth}
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  fence;
+  flag1 = 1;
+}
+void thread2() { 
+  z = 1;
+  fence;
+  flag2 = 1;
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+  if (flag2)
+    assert(z == 1);
+}
+\end{lstlisting}
+\end{column}
+\begin{column}{0.5\textwidth}
+  \begin{onlyenv}<2->
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  (*\textcolor{red}{SSMembar;}*)
+  flag1 = 1;
+}
+void thread2() { 
+  z = 1;
+  fence;
+  flag2 = 1;
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+  if (flag2)
+    assert(z == 1);
+}
+\end{lstlisting}%
+\end{onlyenv}%
+\end{column}
+\end{columns}
+  \note{
+    \begin{itemize}
+      \item First, to the best of our knowledge no change-impact analysis, or
+        dependency analysis, exists handling weak-memory, particularly the
+        weak-memory related statements such as fences and memory barriers
+      \item For example, consider this program where threads 1 and 2
+        synchronize with thread 3 using flag1 and flag2, respecitively.
+      \item Thread one updates the values of x and y and then sets flag1 to
+        true, and thread two updates the value of z and then sets flag2 to true
+      \item Thread 3 reads the value of x and y only if flag1 is set, and
+        similarly reads z only if flag2 is set
+      \item Suppose the fence in thread one is modified to a store-store memory
+        barrier, that is, a synchronization operation ensuring all stores
+        before the barrier have flushed to memory before any subsequent
+        stores
+      \item We would like to know the impacted statements in the program from
+        this change, and to do this we need the dependency graph
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[c]{Weak-Memory Dependency Analysis}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      %\begin{center}
+        \Huge
+        \texttt{\textcolor{matred400}{x} = a * 5;}
+
+        \pause
+
+        \texttt{y = \textcolor{matred400}{x} + 10;}
+        %\only<2>{%
+        %  \texttt{a = 5;}
+
+        %  \texttt{b = 10;}
+
+        %  \texttt{x = a + b;}
+        %}
+      %\end{center}
+    \end{column}
+    \pause
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}[<+->]
+        \item What statements depend on \texttt{x = a * 5}?
+        \begin{itemize}
+          \item \texttt{x = a * 5} updates \texttt{x}
+          \item \texttt{y = x + 10} uses \texttt{x}
+          \item Therefore \texttt{y = x + 10} depends on \texttt{x = a * 5}
+        \end{itemize}
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \pause
+  \begin{center}
+    \Huge
+    Flow-Insensitive Analysis
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item To know which statements are affected by a change we need to
+        identify statements which are affected by some other statement, also
+        known as forward dependencies
+      \item For example, consider the statement here where \texttt{x} is set to
+        the value of \texttt{a} times five
+      \item If we want to know which other statements in the program are
+        impacted by this statement we simply look forward for all the uses of
+        \texttt{x} in the program.
+      \item For example, if we have a statement where \texttt{y} is set to
+        \texttt{x} plus ten then we know this second statement is affected by
+        the first
+      \item More concretely, such a data dependency analysis can be performed
+        by straightforward deductive reasoning:
+      \item That is, if we want to know which statements dependent on \texttt{x
+        = a * 5} then we can immediatly see, syntactically, that it updates
+        \texttt{x}
+      \item And we can see, syntactically, that \texttt{y = x + 10} uses
+        \texttt{x}
+      \item Therefore we know that the second statement depends on the first
+      \item Note that in our high-level reasoning we never considered the order
+        of the statements: we never said that the first statement ocurrs before
+        the second, thus the analysis is flow-insensitive
+      \item The case is slightly more complicated when we consider pointers,
+        since we need to use an alias analysis, but the general idea remains
+        the same.
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[c]{Weak-Memory Dependency Analysis}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \Huge
+      \texttt{x = 10;}
+
+      \texttt{fence;}
+
+      \texttt{y = 20;}
+    \end{column}
+    \pause
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}[<+->]
+        \item No variables referenced within a fence
+        \item Fences \emph{cannot} be analyzed flow insensitively
+        \item Problem: flow-sensitivity greatly decreases runtime with minimal
+          effect on accuracy [Hardekopf 2009]
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item We just looked at how to calculate dependencies for non-concurrency
+        related statements like addition and multiplication
+      \item Intuitively, we should be able to apply the same idea for
+        concurrency related statements like fences and memory barriers
+      \item However, when we try to do this we immediately run into a problem:
+        if we just look at a statement like a fence in isolation we have no
+        notion of the variables either used or updated by the fence
+      \item The reason for this is because a fence's semantics imply reasoning
+        about the ordering of statements in the program.
+      \item Specifically, in this example the fence ensures that the write to
+        \texttt{x} is propagated across all threads before the subsequent write
+        to \texttt{y}
+      \item Because such statement ordering is baked into the fence's semantics
+        they cannot be analyzed flow-insensitively without 
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Cooperative Analysis}
+  \note{
+    \begin{itemize}
+      \item XXX
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Weak-Memory Dependency Analysis}
+%\begin{adjustbox}{totalheight=\textheight-2\baselineskip}
+  \begin{center}
 \begin{tikzpicture}
-  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
-  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [may-imp,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [may-imp,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
 
-  \DrawSquare{8.0cm}{in}
-  %\DrawSquare{8cm}{out}
+  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
 
-  \FillSquare{in}{1}{matorange400}
-  \FillSquare{in}{2}{matorange400}
-  \FillSquare{in}{3}{matorange400}
-  \FillSquare{in}{4}{matorange400}
+  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
 
-  \DrawLines{in}
+  \draw [-latex] (y10.south) -- (fleft.north);
+  \draw [-latex] (fleft.south) -- (fl1.north);
 
+  \draw [-latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [-latex] (z1) -- (fright);
+  \draw [-latex] (fright) -- (fl2);
 
-  \LabelRegionVis{in}{1}{Bounded Model\\Checking}{<2->}
-  \LabelRegionSmallVis{in}{1}{[Alglave et al, CAV '13]}{<2->}
+  \draw [-latex] (fl2) |- (if-f2);
 
-  \LabelRegionVis{in}{2}{Memory Model Oblvious\\Thread Modular\\Static Analysis}{<3->}
-  \LabelRegionSmallVis{in}{2}{[Min\'{e}, VMCAI '14]}{<3->}
+  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw (fright.east) -- ([xshift=4mm]fright.east);
 
-  \LabelRegionVis{in}{3}{Non Modular\\Static Analysis}{<4->}
-  \LabelRegionSmallVis{in}{3}{[Dan et al,  VMCAI '15]}{<4->}
+  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw (z1.east) -- ([xshift=4mm] z1.east);
+  
+  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
+  \draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
 
-  \LabelRegionVis{in}{4}{Incremental for SC}{<5->}
-  \LabelRegionSmallVis{in}{4}{[Guo et al, FSE '15]}{<5->}
+  \draw [-latex] (if-f1) -- (as1);
+  \draw [-latex] (if-f2) -- (as2);
 
-
-  %\node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
-  %\node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  %\node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
-  %\node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
-
-  %\node at (1.6cm,1cm) {Test Generation};
-  %\node at (4.4cm,1cm) {Bug Hunting};
-  %\node at (1.6cm,-1cm) {Program Repair};
-  %\node at (4.4cm,-1cm) {Verification};
 \end{tikzpicture}
+%\end{adjustbox}
 \end{center}
-
 \note{
   \begin{itemize}
-    \item We fill in the gaps and build on prior work in the following ways
-    \item First, compared to prior work on bounded model checking, which
-      attempts to find bugs in programs, we instead verify the absense of bugs,
-      even in potentially infinite programs
-    \item Second, prior thread-modular analyses are so called memory-model
-      oblivious: these analyses are unaware of the underlying memory model and
-      often admit incuarracies by assuming the memory model is too weak
-    \item Third, are static verification techniques which are non-thread
-      modular: these are inscalable due to their explicit enumeration of all
-      thread schedules
-    \item And fourth, are prior incremental analyses for concurrent programs:
-      these only handled sequentially consistent programs, and are unable to
-      model weak-memory concurrent programs.
+    \item To reason about dependencies involving weak-memory primitives we plan
+      to use what we call a semi flow-insensitive analysis: we perform the
+      dependency analysis in a flow insensitive way except for with regards to
+      fences and memory barriers
+    \item Semantically, we consider a fence to be a flush of the store-buffers
+      of a thread, so, it acts as a write to all variables ocurring before the
+      fence
+    \item These semantics do not map to a flow-insensitive dependency analysis
+      since, by definition, they involve knowing which statements ocurr before
+      or after a memory barrier.
+    \item To ensure soundness, some other peculiarties have to be delt with but
+      For the sake of time, I wont go into the details but if you're
+      interested I'd be happy to offline
+    \item But, given the weak-memory aware dependency analysis we plan to
+      formulate a change-impact analysis sound under weak-memory
   \end{itemize}
 }
 \end{frame}
+
 
 \section{Background}
 
@@ -2331,177 +2544,6 @@
 \end{frame}
 
 
-
-\begin{frame}[fragile]{Change-Impact Analysis for Weak Memory}
-
-\begin{columns}[c]
-\begin{column}{0.5\textwidth}
-\begin{lstlisting}[language=C]
-x = y = z = 0;
-flag1 = flag2 = 0;
-void thread1() { 
-  x = 5;
-  y = 10;
-  fence;
-  flag1 = 1;
-}
-void thread2() { 
-  z = 1;
-  fence;
-  flag2 = 1;
-}
-void thread3() {
-  if (flag1)
-    assert(x + y == 15);
-  if (flag2)
-    assert(z == 1);
-}
-\end{lstlisting}
-\end{column}
-\begin{column}{0.5\textwidth}
-  \begin{onlyenv}<2->
-\begin{lstlisting}[language=C]
-x = y = z = 0;
-flag1 = flag2 = 0;
-void thread1() { 
-  x = 5;
-  y = 10;
-  (*\textcolor{red}{SSMembar;}*)
-  flag1 = 1;
-}
-void thread2() { 
-  z = 1;
-  fence;
-  flag2 = 1;
-}
-void thread3() {
-  if (flag1)
-    assert(x + y == 15);
-  if (flag2)
-    assert(z == 1);
-}
-\end{lstlisting}%
-\end{onlyenv}%
-\end{column}
-\end{columns}
-  \note{
-    \begin{itemize}
-      \item But, to the best of our knowledge no such change-impact analysis,
-        or dependency analysis, exists handling weak-memory, particularly the
-        weak-memory related statements such as fences and memory barriers
-      \item For example, consider this program where threads 1 and 2
-        synchronize with thread 3 using flag1 and flag2, respecitively.
-      \item Thread one updates the values of x and y and then sets flag1 to
-        true, and thread two updates the value of z and then sets flag2 to true
-      \item Thread 3 reads the value of x and y only if flag1 is set, and
-        similarly reads z only if flag2 is set
-      \item Suppose the fence in thread one is modified to a store-store memory
-        barrier, that is, a synchronization operation ensuring all stores
-        before the barrier have flushed to memory before any subsequent
-        stores
-      \item We would like to know the impacted statements in the program from
-        this change, and to do this we need the dependency graph
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Weak-Memory Dependency Analysis}
-%\begin{adjustbox}{totalheight=\textheight-2\baselineskip}
-  \begin{center}
-\begin{tikzpicture}
-  \tikzstyle{node}=[thread,font=\scriptsize]
-  %\tikzstyle{node}=[draw
-  %                  , fill=matorange400
-  %                  , line width=1pt
-  %                  , anchor=center
-  %                  , text centered
-  %                  , rounded corners
-  %                  , font=\scriptsize]
-  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
-  %\tikzstyle{imp}=[draw
-  %                 , line width=1pt
-  %                 , ggreen
-  %                 , anchor=center
-  %                 , text centered
-  %                 , dashed
-  %                 , rounded corners
-  %                 , font=\scriptsize]
-  \tikzstyle{may-imp}=[node, dotted]
-  \tikzstyle{mod}=[node, draw=matred400, rectangle]
-\matrix (m) [
- matrix of nodes
- , column sep=23mm
- , row sep=3mm
-, ampersand replacement=\&
-]{
-  \node [may-imp,align=center] (x5) { \texttt{x = 5}};
-  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
-%
-  \node [may-imp,align=center] (y10) { \texttt{y = 10}};
-  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
-%
-  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
-  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
-%
-  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
-  \&  \\
-};%end matrix
-  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
-  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
-  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
-  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
-
-  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
-
-  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
-  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
-
-  \draw [-latex] (y10.south) -- (fleft.north);
-  \draw [-latex] (fleft.south) -- (fl1.north);
-
-  \draw [-latex] (fl1.south) |- (if-f1.west);
-  
-  \draw [-latex] (z1) -- (fright);
-  \draw [-latex] (fright) -- (fl2);
-
-  \draw [-latex] (fl2) |- (if-f2);
-
-  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
-  \draw (fright.east) -- ([xshift=4mm]fright.east);
-
-  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
-  \draw (z1.east) -- ([xshift=4mm] z1.east);
-  
-  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
-  \draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
-
-  \draw [-latex] (if-f1) -- (as1);
-  \draw [-latex] (if-f2) -- (as2);
-
-\end{tikzpicture}
-%\end{adjustbox}
-\end{center}
-\note{
-  \begin{itemize}
-    \item To reason about dependencies involving weak-memory primitives we plan
-      to use what we call a semi flow-insensitive analysis: we perform the
-      dependency analysis in a flow insensitive way except for with regards to
-      fences and memory barriers
-    \item Semantically, we consider a fence to be a flush of the store-buffers
-      of a thread, so, it acts as a write to all variables ocurring before the
-      fence
-    \item These semantics do not map to a flow-insensitive dependency analysis
-      since, by definition, they involve knowing which statements ocurr before
-      or after a memory barrier.
-    \item To ensure soundness, some other peculiarties have to be delt with but
-      For the sake of time, I wont go into the details but if you're
-      interested I'd be happy to offline
-    \item But, given the weak-memory aware dependency analysis we plan to
-      formulate a change-impact analysis sound under weak-memory
-  \end{itemize}
-}
-\end{frame}
-
 \begin{frame}{Incremental Thread-Modular Analysis}
   \begin{itemize}[<+->]
     \item May be impacted
@@ -2538,6 +2580,7 @@ void thread3() {
 %}
 %\end{frame}
 
+
 \section{Conclusion}
 
 \begin{frame}{Conclusion}
@@ -2565,6 +2608,100 @@ void thread3() {
 
 %%%%%%% Backup slides
 \appendix
+
+\begin{frame}[c]
+  \begin{center}
+\begin{tikzpicture}
+  \draw[fill=matorange400] (-5,-2) rectangle (5,0) node[pos=0.5, visible
+  on=<4->] {Incremental
+  Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-4.5) rectangle (5,-2.5) node[pos=0.5, visible
+  on=<3->] {Weak
+  Memory Aware Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-7) rectangle (5,-5) node[pos=0.5, visible
+  on=<2->] {Constraint
+  Based Static Analysis};
+\end{tikzpicture}
+  \end{center}
+
+  \note{
+    \begin{itemize}
+      \item We answer these research questions in three steps, each building
+        upon the next
+      \item First, I show how a constraint sovler can be coupled with a numeric
+        abstract interpreter to form a new kind of static analysis of
+        concurrent progrmas
+      \item Second, I show how this new analysis can be designed to acurratley
+        analyze weak memory models
+      \item And third, I show how this new weak-memory aware analysis can be
+        made incremental.
+      \item We've made significant progress already towards these goals, with
+        the first two parts already published.
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile,t]{Related Work} 
+\begin{center}
+\begin{tikzpicture}
+  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+
+  \DrawSquare{8.0cm}{in}
+  %\DrawSquare{8cm}{out}
+
+  \FillSquare{in}{1}{matorange400}
+  \FillSquare{in}{2}{matorange400}
+  \FillSquare{in}{3}{matorange400}
+  \FillSquare{in}{4}{matorange400}
+
+  \DrawLines{in}
+
+
+  \LabelRegionVis{in}{1}{Bounded Model\\Checking}{<2->}
+  \LabelRegionSmallVis{in}{1}{[Alglave et al, CAV '13]}{<2->}
+
+  \LabelRegionVis{in}{2}{Memory Model Oblvious\\Thread Modular\\Static Analysis}{<3->}
+  \LabelRegionSmallVis{in}{2}{[Min\'{e}, VMCAI '14]}{<3->}
+
+  \LabelRegionVis{in}{3}{Non Modular\\Static Analysis}{<4->}
+  \LabelRegionSmallVis{in}{3}{[Dan et al,  VMCAI '15]}{<4->}
+
+  \LabelRegionVis{in}{4}{Incremental for SC}{<5->}
+  \LabelRegionSmallVis{in}{4}{[Guo et al, FSE '15]}{<5->}
+
+
+  %\node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
+  %\node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  %\node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
+  %\node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+
+  %\node at (1.6cm,1cm) {Test Generation};
+  %\node at (4.4cm,1cm) {Bug Hunting};
+  %\node at (1.6cm,-1cm) {Program Repair};
+  %\node at (4.4cm,-1cm) {Verification};
+\end{tikzpicture}
+\end{center}
+
+\note{
+  \begin{itemize}
+    \item We fill in the gaps and build on prior work in the following ways
+    \item First, compared to prior work on bounded model checking, which
+      attempts to find bugs in programs, we instead verify the absense of bugs,
+      even in potentially infinite programs
+    \item Second, prior thread-modular analyses are so called memory-model
+      oblivious: these analyses are unaware of the underlying memory model and
+      often admit incuarracies by assuming the memory model is too weak
+    \item Third, are static verification techniques which are non-thread
+      modular: these are inscalable due to their explicit enumeration of all
+      thread schedules
+    \item And fourth, are prior incremental analyses for concurrent programs:
+      these only handled sequentially consistent programs, and are unable to
+      model weak-memory concurrent programs.
+  \end{itemize}
+}
+\end{frame}
+
 \begin{frame}
 
 \begin{center}

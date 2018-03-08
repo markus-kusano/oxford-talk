@@ -1,6 +1,6 @@
 # Create a pdf from a single source file
 
-SOURCE=oxford
+SOURCE=defense
 LATEX_FLAGS=
 
 all:
