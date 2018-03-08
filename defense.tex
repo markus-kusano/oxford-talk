@@ -886,7 +886,7 @@
 %  Non Modular
 %\end{frame}
 
-\section{Motivating Example}
+\section{Motivation}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection,currentsubsection]
@@ -1045,7 +1045,7 @@ void thread3() {
 
       \texttt{fence;}
 
-      \texttt{y = 20;}
+      \texttt{y = x + 20;}
     \end{column}
     \pause
     \begin{column}{0.5\textwidth}
@@ -1072,15 +1072,53 @@ void thread3() {
         \texttt{x} is propagated across all threads before the subsequent write
         to \texttt{y}
       \item Because such statement ordering is baked into the fence's semantics
-        they cannot be analyzed flow-insensitively without 
+        they cannot be reasonably be analyzed flow-insensitively
     \end{itemize}
   }
 \end{frame}
 
-\begin{frame}{Cooperative Analysis}
+\begin{frame}[c]{Semi-Flow-Sensitive Dependency Analysis}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \Huge
+      \texttt{x = 10;}
+
+      \texttt{fence;}
+
+      \texttt{y = x + 20;}
+    \end{column}
+    \pause
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}[<+->]
+        \item Analyze non-concurrency constructs flow-insensitively
+        \item Analyze concurrency synchronization flow-sensitively
+        \item What statements depend on the \texttt{fence}?
+        \begin{itemize}
+          \item \texttt{y = x + 20} is a store/load reachable from the
+            \texttt{fence}
+          \item Therefore, \texttt{y = x + 20} depends on the \texttt{fence}
+        \end{itemize}
+      \end{itemize}
+    \end{column}
+  \end{columns}
   \note{
     \begin{itemize}
-      \item XXX
+      \item To solve this issue of balancing runtime overhead and accuracy we
+        propose what we call a semi-flow-sensitive analysis: we analyze only
+        the concurrency constructs flow-sensitively, and leave everything else
+        as flow-insensitively
+      \item Specifically, we analyze non-concurrency synchronization, such as
+        the writes to \texttt{x} and \texttt{y}, flow-insensitively; and we
+        analyze the fence flow-sensitively
+      \item I showed briefly before the reasoning behind deducing dependencies
+        involving non-concurrency synchronization such as the updates to
+        \texttt{x} and \texttt{y}
+      \item We proceed in a similar deductive manner to reason about fences.
+      \item For example, if we want to see which statements depend on the
+        fence, we first look for those stores/loads which are reachable from
+        the fence
+      \item This includes the write to \texttt{y}, therefore we know that the
+        write to \texttt{y} is dependent on the fence.
     \end{itemize}
   }
 \end{frame}
@@ -1163,36 +1201,1551 @@ void thread3() {
 \end{center}
 \note{
   \begin{itemize}
-    \item To reason about dependencies involving weak-memory primitives we plan
-      to use what we call a semi flow-insensitive analysis: we perform the
-      dependency analysis in a flow insensitive way except for with regards to
-      fences and memory barriers
-    \item Semantically, we consider a fence to be a flush of the store-buffers
-      of a thread, so, it acts as a write to all variables ocurring before the
-      fence
-    \item These semantics do not map to a flow-insensitive dependency analysis
-      since, by definition, they involve knowing which statements ocurr before
-      or after a memory barrier.
-    \item To ensure soundness, some other peculiarties have to be delt with but
-      For the sake of time, I wont go into the details but if you're
-      interested I'd be happy to offline
-    \item But, given the weak-memory aware dependency analysis we plan to
-      formulate a change-impact analysis sound under weak-memory
+    \item At this point, I've shown the high-level idea of how we can reason
+      about dependencies, specifically those involving concurrency
+      synchronization primitives
+    \item Given this dependency-reasoning system we can then generate the graph
+      of all dependencies between statements, which is known as the program
+      dependency graph
+    \item Here is the dependency graph for the initial program we looked at
+      where a fence was modified to be a store--store memory barrier
+    \item We'll return to this example in detail after providing more
+      background, but note that given this graph we can easily see which
+      statements are affected by a change by looking at reachability within
+      this graph
+    \item Specifically, we can see that the store--store memory barrier impacts
+      the read of \texttt{flag1} guarding the subsequent assertion
+    \item What remains to actually make use of this dependency information is
+      to then subsequently integrate it into the abstract interpreter: the
+      remainder of this presentation will show how this is done
   \end{itemize}
 }
 \end{frame}
 
+\begin{frame}{Cooperative Analysis}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        {\Large Non-Cooperative}
+        \vspace{3em}
 
-\section{Background}
+        \begin{tikzpicture}
+          \tikzstyle{node}=[thread,font=\Large]
+          \node [node]            (ci-noloop) {Change--Impact Analysis};
+          \node [node, below=5em] (ai-noloop) {Abstract Interpretation};
+          \draw [->, garr] (ci-noloop.south) -- (ai-noloop.north);
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+    \pause
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        {\Large Cooperative}
+        \vspace{3em}
+
+        \begin{tikzpicture}
+          \tikzstyle{node}=[thread,font=\Large]
+          \node [node]            (ci-loop) {Change--Impact Analysis};
+          \node [node, below=5em] (ai-loop) {Abstract Interpretation};
+          \draw [->, garr] ($(ci-loop.south) + (-1.0em, 0)$)
+                           -- ($(ai-loop.north) + (-1.0em, 0)$);
+          \draw [->, garr] ($(ai-loop.north) + (1.0em, 0)$)
+                           -- ($(ci-loop.south) + (1.0em, 0)$);
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item Finally, our incremental abstract interpretation is the first of
+        what we call cooperative
+      \item Traditionally, a lightweight analysis such as a change--impact
+        analysis is run prior and used within a more heavyweight analysis, such
+        as numerical abstract interpretatoin
+      \item Other examples of this pattern are using an alias analysis before
+        numerical abstract interpretation, or using a change--impact analysis
+        before symbolic execution
+      \item Overall, the gist of this is using a lightweight analysis as a
+        preprocessing step before a more heavyweight analysis
+      \item Our insight, however, is that this introduces inacuracies into the
+        analysis: the lightweight change-impact analysis is unaware of the more
+        heavyweight information within the numerical abstract interpretation
+      \item Our solution to this is to compute the change-impact analysis
+        simultaneously along side the numerical abstract interpretation 
+      \item In this way, we allow the change-impact analysis to make use of the
+        heavyweight numerical information thereby increasing the acurracy of
+        not only the change--impact but the overall numerical analysis
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Overview}
+  \tableofcontents[currentsection]
+\note {
+  Next, I'll discuss our proposed plan to make the previous thread-modular
+  analysis incremental.
+}
+\end{frame}
+
+\section{Cooperative Incremental Thread Modular Abstract Interpretation}
+
+\begin{frame}[c]{Incremental Analysis}
+  \begin{itemize}[<+->]
+    \item Given previously analyzed program $P_1$ analyze new version $P_2$
+    \item Ignore unimpacted regions 
+    \item Reuse old analysis information
+    \item Challenges:
+      \begin{itemize}
+        \item Identifying impacted statements?
+        \item Integrating with thread-modular analyzer?
+      \end{itemize}
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      %\item Next I'll show how we made out constraint-based thread-modular
+        %analyzer incremental
+      \item The gist of an incremental analysis is given an old program version
+        which was previously analyzed, analyze a new program version
+      \item This provides an decrease in runtime overhead since the analysis
+        can ignore regions unimpacted by the modifications
+      \item Also, analysis results from the old version can be reused and
+        passed to the new version
+      \item This brings several challenges which we addressed, specifically, it
+        is unclear how to identify impacted statements in the program,
+        particularly when dealing with weak-memory primitives
+      \item For example, if the user modifies, or removes a memory fence which
+        statements in the program are impacted
+      \item We needed to find an efficient way to compute this across threads
+      \item Also, it is unclear how to integrate the impacted-statement
+        information into the thread-modular analyzer in a way that
+        significantly reduces runtime
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Change-Impact Analysis}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[name=ci01
+                        , numbers=left
+                        , firstnumber=1
+                        , gobble=8]
+        x = func();
+        y = otherFunc();
+        if (!x) {
+          x = -1;
+        }
+        if (!y) {
+          y = -1;
+        }
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[name=ci01
+                        , numbers=left
+                        , firstnumber=1
+                        , gobble=8]
+        x = (*\textcolor{matred400}{coolFunc();}*)
+        y = otherFunc();
+        if (!x) {
+          x = -1;
+        }
+        if (!y) {
+          y = -1;
+        }
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item Identifying regions impacted by code modifications is done by
+        what's called a change-impact analysis
+      \item Here, we take modifications to the old program, and identify
+        regions in the new program which may be impacted by the change 
+      \item Suppose the first function called was changed from func to coolFunc
+      \item What we would like to know are the other statements in the program
+        impacted by this modifications
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Change-Impact Analysis}
+  \begin{center}
+    \only<1>{
+    \begin{tikzpicture}[node distance=1.25cm]
+      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
+      \node[thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
+      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
+      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
+      \node[thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
+      \node[thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
+
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
+
+      \draw[garr] (yf.east) -| ([xshift=1.5cm]ify.east);
+      \draw[garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
+
+      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
+
+      \draw[garr,>=latex,->] (ify.south) -- (yeq.north);
+    \end{tikzpicture}
+  }%only<1>
+    \only<2->{
+    \begin{tikzpicture}[node distance=1.25cm]
+      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
+      \node[opacity=0.2,thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
+      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
+      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
+      \node[opacity=0.2,thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
+      \node[opacity=0.2,thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
+
+      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
+      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
+
+      \draw[opacity=0.2,garr] (yf.east) -| ([xshift=1.5cm]ify.east);
+      \draw[opacity=0.2,garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
+
+      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
+
+      \draw[opacity=0.2,garr,>=latex,->] (ify.south) -- (yeq.north);
+    \end{tikzpicture}
+  }%only<1->
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item To do this, we first build the program dependency graph, and then
+        compute all the statements reachable from the modified statement
+      \item Specifically, this graph shows both the data and control
+        dependencies between statements
+      \item The statements reachable in the graph from the modified statements
+        are only those involving x
+      \item Now we can start to see why a change-impact analysis is useful to
+        couple with an analyzer: it can automatically reduce the number of
+        statements of interest
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Weak Memory Aware Dependency Analysis}
+  \begin{itemize}[<+->]
+    \item ``Standard'' data and control dependencies [Kennedy '02]
+      \begin{itemize}
+        \item Flow-insensitivity ensures soundness with threads
+      \end{itemize}
+    \item Flow-sensitive memory barrier/fence dependency analysis [new]
+    \item Computed as a nested fixed point
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item The first part of our incremental analysis is a weak-memory aware
+        dependency analysis
+      \item To do this, we first build upon standard prior work calculating
+        data and control dependencies with sequential program constructs
+      \item We reason about the soundness of these prior analyses in the
+        presense of threads by ensuring they are flow-insensitive: they admit
+        all possible thread schedules
+      \item Next, we add to this a flow-sensitive reasoning of memory barriers
+        and fences
+      \item Note that both of these analyses are computed in a nested fixed
+        point
+      \item This means that dependencies found in one are considered in the
+        other and vice versa
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[c]{Weak Memory Aware Dependency Analysis}
+
+\begin{center}
+\begin{tikzpicture}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [node,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [node,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [node,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [node,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [node,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
+
+  % data dependencies
+  \draw [visible on=<2->, -latex] (x5.east) -| ([xshift=10mm]as1.north);
+  \draw (y10.east, visible on=<3->) -- ([xshift=23.8mm]y10.east);
+
+  % Control dependnecies on assertion
+  \draw [-latex, visible on=<4->] (if-f1) -- (as1);
+  \draw [-latex, visible on=<4->] (if-f2) -- (as2);
+
+  %% Fence dependencies
+  %\draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  %\draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+
+  %\draw [-latex] (y10.south) -- (fleft.north);
+  %\draw [-latex] (fleft.south) -- (fl1.north);
+
+  %\draw [-latex] (fl1.south) |- (if-f1.west);
+  %
+  %\draw [-latex] (z1) -- (fright);
+  %\draw [-latex] (fright) -- (fl2);
+
+  %\draw [-latex] (fl2) |- (if-f2);
+
+  %\draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  %\draw (fright.east) -- ([xshift=4mm]fright.east);
+
+  %\draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  %\draw (z1.east) -- ([xshift=4mm] z1.east);
+  %
+  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+
+
+\end{tikzpicture}
+\end{center}
+\note{
+  \begin{itemize}
+    \item To see the dependency analysis more concretely we'll show how we
+      build it from the initial example
+    \item Here, we have threads one in the upper left, thread two in the upper
+      right, and thread three in the bottom center
+    \item First, we have the regular data dependencies, such as the dependency
+      from the writes to \texttt{x} and \texttt{y} to its read in the
+      assertion, as well as the control-dependencies guarding the assertions
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}{Types of Impact} 
+  \begin{center}
+    \Large%
+    \textbf{May Impact}%
+  \end{center}
+  \vspace{-1em}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \large
+        \texttt{a = 10;}
+
+        \textcolor{matred400}{\texttt{x = a + 5;}}
+      \end{center}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        \begin{tikzpicture}
+          \tikzstyle{node}=[thread,font=\Large]
+          \node [node]            (mi-one) {\texttt{a = 10}};
+          \node [node, below=2em] (mi-two) {\texttt{x = a + 5}};
+          \draw [->, garr] (mi-one.south) -- (mi-two.north);
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+
+  \pause
+  %\vspace{2em}
+  \begin{center}
+    \Large
+    \textbf{May Be Impacted}
+  \end{center}
+  \vspace{-1em}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        AAA
+      \end{center}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{center}
+        BBB
+      \end{center}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item Building upon the examples we previously looked at, I'll introduce
+        the two different types of impact from a modification that we consider
+      \item The first considers statements which may-impact a modification
+      \item For example, suppose that 
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Calculating May Impact and May Be Impacted}
+  Weak memory aware dependency analysis
+
+  Backward reachability from impacted statement is May Impact
+
+  Forward reachability from impacted statement is May Be Impacted
+\end{frame}
+
+\section{Experiments}
+
+
+%\begin{frame}{Incremental Thread-Modular Analysis}
+%  \begin{itemize}[<+->]
+%    \item May be impacted
+%    \item May impact
+%    \item Preserve analysis results
+%    \item Ignore transfer functions
+%  \end{itemize}
+%  \note{
+%    \begin{itemize} 
+%      \item Very briefly, I'll go over how we plan to create an incremental
+%        thread-modular analyzer
+%      \item We make use of two types of impact information: the first, as we
+%        saw before, are identifying statements in the program which may-be
+%        impacted by the change
+%      \item The second, are statements which may-impact impacted statements
+%      \item Using this information we are able to preserve analysis results
+%        from the old program version, as well as ignore the transfer functions
+%        of many statements
+%      \item This causes the analysis to converge much faster and thus reduce
+%        runtime
+%    \end{itemize} 
+%  } 
+%\end{frame}
+
+
+
+%\section{Experiments}
+%
+%\begin{frame}{Overview}
+%  \tableofcontents[currentsection,currentsubsection]
+%\note {
+%  Next I'll summarize our experimental results. All tests were done on a
+%  consumer linux laptop with 8 GB of ram and a 2.8 GHz x86 processor
+%}
+%\end{frame}
+
+
+\section{Conclusion}
+
+\begin{frame}{Future Work}
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}[<+->]
+    \item Constraint-Based Thread-Modular Abstract Interpretation
+    \item Handling TSO, PSO, RMO
+    \item Incremental thread-modular analysis
+  \end{itemize}
+  \pause
+  \begin{center}
+  \Huge Questions?
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item So, in conclusion I presented a constraint-based thread-modular
+        abstract interpretation algorithm first handling sequentially consistent programs
+      \item Then, I showed how we created a weak-memory aware analyzer for TSO, PSO, and RMO.
+      \item And finally, I showed how we propose to make the analysis
+        incremental by designing a weak-memory aware change-impact analysis.
+      \item With that I'll take any questions
+    \end{itemize}
+  }
+\end{frame}
+
+
+%%%%%%% Backup slides
+\appendix
+
+\begin{frame}[c]
+  \begin{center}
+\begin{tikzpicture}
+  \draw[fill=matorange400] (-5,-2) rectangle (5,0) node[pos=0.5, visible
+  on=<4->] {Incremental
+  Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-4.5) rectangle (5,-2.5) node[pos=0.5, visible
+  on=<3->] {Weak
+  Memory Aware Constraint Based Static Analysis};
+  \draw[fill=matorange400] (-5,-7) rectangle (5,-5) node[pos=0.5, visible
+  on=<2->] {Constraint
+  Based Static Analysis};
+\end{tikzpicture}
+  \end{center}
+
+  \note{
+    \begin{itemize}
+      \item We answer these research questions in three steps, each building
+        upon the next
+      \item First, I show how a constraint sovler can be coupled with a numeric
+        abstract interpreter to form a new kind of static analysis of
+        concurrent progrmas
+      \item Second, I show how this new analysis can be designed to acurratley
+        analyze weak memory models
+      \item And third, I show how this new weak-memory aware analysis can be
+        made incremental.
+      \item We've made significant progress already towards these goals, with
+        the first two parts already published.
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile,t]{Related Work} 
+\begin{center}
+\begin{tikzpicture}
+  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+
+  \DrawSquare{8.0cm}{in}
+  %\DrawSquare{8cm}{out}
+
+  \FillSquare{in}{1}{matorange400}
+  \FillSquare{in}{2}{matorange400}
+  \FillSquare{in}{3}{matorange400}
+  \FillSquare{in}{4}{matorange400}
+
+  \DrawLines{in}
+
+
+  \LabelRegionVis{in}{1}{Bounded Model\\Checking}{<2->}
+  \LabelRegionSmallVis{in}{1}{[Alglave et al, CAV '13]}{<2->}
+
+  \LabelRegionVis{in}{2}{Memory Model Oblvious\\Thread Modular\\Static Analysis}{<3->}
+  \LabelRegionSmallVis{in}{2}{[Min\'{e}, VMCAI '14]}{<3->}
+
+  \LabelRegionVis{in}{3}{Non Modular\\Static Analysis}{<4->}
+  \LabelRegionSmallVis{in}{3}{[Dan et al,  VMCAI '15]}{<4->}
+
+  \LabelRegionVis{in}{4}{Incremental for SC}{<5->}
+  \LabelRegionSmallVis{in}{4}{[Guo et al, FSE '15]}{<5->}
+
+
+  %\node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
+  %\node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  %\node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
+  %\node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+
+  %\node at (1.6cm,1cm) {Test Generation};
+  %\node at (4.4cm,1cm) {Bug Hunting};
+  %\node at (1.6cm,-1cm) {Program Repair};
+  %\node at (4.4cm,-1cm) {Verification};
+\end{tikzpicture}
+\end{center}
+
+\note{
+  \begin{itemize}
+    \item We fill in the gaps and build on prior work in the following ways
+    \item First, compared to prior work on bounded model checking, which
+      attempts to find bugs in programs, we instead verify the absense of bugs,
+      even in potentially infinite programs
+    \item Second, prior thread-modular analyses are so called memory-model
+      oblivious: these analyses are unaware of the underlying memory model and
+      often admit incuarracies by assuming the memory model is too weak
+    \item Third, are static verification techniques which are non-thread
+      modular: these are inscalable due to their explicit enumeration of all
+      thread schedules
+    \item And fourth, are prior incremental analyses for concurrent programs:
+      these only handled sequentially consistent programs, and are unable to
+      model weak-memory concurrent programs.
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}
+
+\begin{center}
+\begin{tikzpicture}
+  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
+  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
+
+  \DrawSquare{5.5cm}{in}
+  \DrawSquare{8cm}{out}
+  \FillSquare{out}{1}{matorange400}
+  \FillSquare{out}{2}{matorange400}
+  \FillSquare{out}{3}{matorange400}
+  \FillSquare{out}{4}{matorange400}
+
+  \FillSquare{in}{1}{matyellow400}
+  \FillSquare{in}{2}{matyellow400}
+  \FillSquare{in}{3}{matyellow400}
+  \FillSquare{in}{4}{matyellow400}
+
+  \DrawLines{in}
+
+
+  \LabelRegion{in}{1}{Test Generation}
+  \LabelRegionSmall{in}{1}{[FSE15, ASE16]}
+
+  \LabelRegion{in}{2}{Bug Hunting}
+  \LabelRegionSmall{in}{2}{[ASE14, PLDI15, FSE16$^2$]}
+
+  \LabelRegion{in}{3}{Repair}
+  \LabelRegionSmall{in}{3}{[ICSE15, ISSTA15]}
+
+  \LabelRegion{in}{4}{Verification}
+  \LabelRegionSmall{in}{4}{[FSE16$^1$, FSE17, ASE17]}
+
+
+  \node at (-2.5cm,3.5cm) {Incremental};
+  \node at (-2.5cm,3.15cm) {\tiny [ASE16]};
+  \node at (2cm,3.5cm) {Property Directed};
+  \node at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
+
+  %\node at (1.6cm,1cm) {Test Generation};
+  %\node at (4.4cm,1cm) {Bug Hunting};
+  %\node at (1.6cm,-1cm) {Program Repair};
+  %\node at (4.4cm,-1cm) {Verification};
+\end{tikzpicture}
+\end{center}
+  \note{
+    \begin{itemize}
+      \item With that, I'll take any questions
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Soundness}
+  \begin{itemize}
+    \item<1-> As sound as underlying sequential abstract interpreter
+    \item<2-> Interference combinations \emph{focus} the analysis
+      \begin{itemize}
+        \item<5-> \emph{Systematic Design of Program Analysis Frameworks.} Patrick
+          Cousot and Radhia Cousot. POPL '79.
+        \item<5-> \emph{Parametric Shape Analysis via 3-valued Logic.} Mooly Sagiv,
+          Thomas Reps, and Reinhard Wilhelm. POPL '99, TOPLAS '02.
+      \end{itemize}
+  \end{itemize}
+  \begin{center}
+    \only<3>{
+      \begin{tikzpicture}
+          [txt/.style={minimum width=2cm,anchor=center}
+          ]
+          \node (in) [fill=white, rounded corners] {\Huge $I$};
+
+          \node (f) [fill=white
+                    , rounded corners
+                    , right=2em of in
+                    ]
+                    {\Huge $f()$};
+          \node (out) [fill=white
+                      , rounded corners
+                      , right=2em of f
+                      ]
+                      {\Huge $O$};
+
+          \draw[-latex,garr] (in) -- (f);
+          \draw[-latex,garr] (f) -- (out);
+      \end{tikzpicture}
+    }%only
+    \only<4->{
+      \begin{tikzpicture}
+          [txt/.style={minimum width=2cm,anchor=center}
+          ]
+          \node (in1) [fill=white, rounded corners] {\Huge $I_1$};
+          \node (inds) [fill=white
+                      , below=1em of in1
+                      , rounded corners] 
+                            {\Huge ...};
+          \node (bigi) [fill=white
+                       , left=2em of inds
+                       , rounded corners] 
+                            {\Huge $I$};
+          \node (inn) [fill=white
+                      , below=1em of inds
+                      , rounded corners] 
+                            {\Huge $I_n$};
+
+
+          \node (f1) [fill=white
+                    , rounded corners
+                    , right=2em of in1
+                    ]
+                    {\Huge $f()$};
+
+          \node (fds) [fill=white
+                    , rounded corners
+                    , below=1em of f1
+                    ]
+                    {\Huge ...};
+          \node (fn) [fill=white
+                    , rounded corners
+                    , right=2em of inn
+                    ]
+                    {\Huge $f_n()$};
+          \node (out) [fill=white
+                      , rounded corners
+                      , right=2em of f1
+                      ]
+                      {\Huge $O_1$};
+
+          \node (outds) [fill=white
+                      , rounded corners
+                      , below=1em of out
+                      ]
+                      {\Huge ...};
+          \node (outn) [fill=white
+                      , rounded corners
+                      , below=1em of outds
+                      ]
+                      {\Huge $O_n$};
+          \node (fout) [fill=white
+                      , rounded corners
+                      , right=2em of outds
+                      ]
+                      {\Huge $O$};
+
+          \draw[-latex,garr] (in1) -- (f1);
+          \draw[-latex,garr] (f1) -- (out);
+          
+          \draw[-latex,garr] (inn) -- (fn);
+          \draw[-latex,garr] (fn) -- (outn);
+
+          \draw[-latex,garr] (out) -- (fout);
+          \draw[-latex,garr] (outds) -- (fout);
+          \draw[-latex,garr] (outn) -- (fout);
+
+          \draw[-latex,garr] (bigi) -- (in1);
+          \draw[-latex,garr] (bigi) -- (inds);
+          \draw[-latex,garr] (bigi) -- (inn);
+      \end{tikzpicture}
+    }
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item Finally, I'll provide a discussion on the soundness of our approach
+      \item Most of the thread-modular analysis builds upon the sequential
+        abstract interpreter
+      \item This is because each thread is, essentially, analyzed individually
+        as a sequential program and then has its results propagated to other
+        threads
+      \item Our approach has its soundness based on this approach: we are just
+        as sound as the underlying abstract interpreter 
+      \item This is because we largely are not modifying the semantics of the
+        sequential interpreter
+      \item Specifically, our consideration of interference combinations in
+        isolation is a form of focusing
+      \item At a high level, focusing takes the input to the analysis and
+        instead of analyzing the entire input it breaks it up into smaller
+        pieces
+      \item Each of these pieces are analyzed individually and then the results
+        are combined
+      \item Prior work has already discussed the soundness of this technique
+        and we build of these findings
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Handling Loops}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=loop]
+  int x = 0;
+  void thread1() {
+    create(thread2);
+    while (...) {
+      int t1 = x;
+    }
+    create(thread3);
+  }
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=loop]
+  void thread2() {
+    x = 1;
+    x = 2;
+  }
+  void thread3() {
+    x = 10;
+  }
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \pause
+  \begin{itemize}[<+->]
+    \item 0*1*2*
+    \item $\Set{0,1,2}$
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Thus far, I've ignored the case where shared memory reads are
+        performed within a loop
+      \item In general, when a load is in a loop it can read from an arbitrary,
+        and potentially infinite, number of different interferences
+      \item As a result, if we simply treat loads within loops in the same way
+        as as previously described there could be an infinite number of
+        infinitely long combinations
+      \item Consider this example, thread one creates thread two and then
+        repeatedly loads the value of x an arbitrary number of times before
+        creating thread two
+      \item Notice that there is a must-happen-before edges between the load
+        within the loop and the write to x by thread 3: because thread 3 is
+        created after the load, the load cannot read the values written by
+        thread 3
+      \item So, the value read within the loop could be any sequence starting
+        with an arbitrary number of zeros, followed by ones, followed by 2s
+      \item Our previous system of constraints cannot handle such an infinite
+        sequence so, instead, we merge all the potential interferences into a
+        single value
+      \item This means that the loads performed across loop-iterations will not
+        be handled in a flow-sensitive way, but, any interfering store which
+        cannot be read on any iteration will be remove thus improving acurracy
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Property Directed Pruning}
+
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=motiv3]
+int x = 0;
+void thr(int v) {
+  int t1 = 5 * v;
+  int t2 = x;
+  x = t1 + t2;
+  if (t1 < 0) 
+    ERROR!;
+}
+    \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C, name=motiv3]
+int main() {
+  thread_create(thr,5);
+  thread_create(thr,10);
+  x = 1;
+  thread_exit(0);
+}
+
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \note{
+    \begin{itemize}
+      \item First, property directed pruning uses slices from the
+        program-dependence graph to remove redundant statements
+      \item If we look at this program, the main thread, on the right, creates
+        two threads with arguments 5 and 10, and then performs a shared memory
+        write to x
+      \item The threads use their argument to perform a computation, and then
+        perform a separate computation related to x
+      \item The property being checked is related to t1, and the input argument
+        to the thread
+      \item If we look at the property being checking within each thread, it
+        only depends on the input to the thread: the shared memory read on x
+        has no influence on the reachability of the ERROR
+      \item So, during the abstract interpretation, we can skip those
+        statements involved with x
+      \item Additionally, when exploring possible interference combinations, we
+        can skip those related to x
+      \item So, this both reduces the number of interference combinations and
+        also reduces the individual analysis of each thread
+      \item These dependencies between statements are captured easily by using
+        the program dependence graph
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Clustering}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=prop]
+int x = 0;
+int y = 0;
+void thread1() {
+  x = 1;
+  y = 1;
+}
+    \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+    \begin{lstlisting}[language=C, name=prop]
+void thread2() {
+  int t1 = x;
+  int t2 = y;
+  assert(x >= 0);
+  assert(y >= 0);
+}
+    \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \pause
+  \begin{itemize}[<+->]
+    \item $2*2 = 4$ interference combinations
+    \item Clustering: 2 combinations
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item The second optimization we use is called clustering and also uses
+        the program dependence graph
+      \item This optimization reduces the number of possible interference
+        combinations thereby reducing the runtime of the analysis
+      \item Here we have two threads, one performing shared memory writes to
+       x and y, and the other is performing shared memory read
+      \item The two properties being analyzed are separately on x and y
+      \item Using the previously described technique, there are two possible
+        interfering stores for each of the loads in thread 2: one from thread 1
+        and one causing thread 2 to read from its own memory environment
+      \item This means that thread 2 will have to be analyzed 4 times, one for
+        each combination
+      \item However, if we look at the program, the properties being checked
+        are performed on disjoint computations 
+      \item Specifically, the writes to x and the writes to y do not influence
+        each other
+      \item So, during the analysis, the combinations between the reads of x
+        and y in thread two can be performed independently
+      \item As a result, we only need to consider the two combinations
+        independently meaning we only need to run the analysis twice for thread
+        two
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+      \item Average 57\% of program impacted by modifications
+      \item Ranging from 1.5\%--92\%
+      \item Min\'{e}
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 1263 seconds
+        \end{itemize}
+      \item Incremental w/o constraints
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 748 seconds
+        \end{itemize}
+      \item Non-incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 14,389 seconds
+        \end{itemize}
+      \item Incremental with constraints
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 2642 seconds
+        \end{itemize}
+    \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Finally, here are the results for our incremental analyzer. We
+        compared again to Min\'{e} and implemented an incremental version of
+        both his algorithm, as well as our constaint-based analyzer
+      \item Our test set had 57\% of the program impacted on average, ranging
+        from 1.5 to 92 percent.
+      \item First, his approach verified 6384 properties in 1,263 seconds,
+        whereas our incremental version verified the same number of properties
+        in 748 seconds, about a 1.7x speedup
+      \item Second, the constraint based approach took 14,000 seconds to verify
+        11,458 properties, whereas our incremental version took only 2642
+        seconds to verify the same number of properties, about a 5.4x speedup
+    \end{itemize}
+  }
+\end{frame}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection,currentsubsection]
 \note {
-  Before going into the three main bodies of work within my dissertation I'll
-  provide some background necessary to understand my contributions.
+  Now that I've gone over some examples, I'll provide the details of our new
+  flow-sensitive analysis
 }
 \end{frame}
 
+\begin{frame}[fragile]{Overview}
+  \begin{center}
+    \begin{tikzpicture}
+      \matrix (m) [matrix of nodes, 
+        column sep=12mm,
+        row sep=10mm,
+        ampersand replacement=\&,
+        nodes={draw, % General options for all nodes
+          line width=1pt,
+          anchor=center, 
+          text centered,
+          rounded corners,
+          %minimum width=1.5cm, minimum height=8mm
+        },
+          % special styles
+          txt/.style={minimum width=1cm,anchor=center},
+        ] {
+             |[txt,  text width=2.5cm]| {\Large Program}                       % m-1-1
+           \& |[txt, text width=3.0cm]| {\Large Thread-modular Abstract Interpretation}    % m-1-2
+           \& |[txt, text width=2.5cm]| {\Large Invariants}                             % m-1-3
+           \\
+           % below was previously boldfont
+           \& |[txt, text width=2cm]| {\Large  Query} % m-2-2
+           \&
+           \\
+           % below was previously boldfont
+            |[txt, text width=2.5cm]|  {\Large  $\mu${Z} Solver (Datalog)}      % m-3-1
+           % below was previously boldfont
+           \& |[txt, text width=3.0cm]| {\Large  Interference Feasibility Checking} % m-3-2
+           \\
+     }; % end matrix
+      \draw[-latex,garr] (m-1-1.east) -- (m-1-2.west);
+      \draw[-latex,garr] (m-1-2.east) -- (m-1-3.west);
+
+      \draw[-latex,garr] ([xshift=0.05cm]m-2-2.east) to [out=15,in=-15]  ([xshift=0.75cm]m-1-2.south);
+      \draw[-latex,garr] ([xshift=-0.75cm]m-1-2.south) to [out=165,in=195]  ([xshift=-0.05cm]m-2-2.west);
+   
+      \draw[-latex,garr] (m-1-1.south) -- (m-3-1.north);
+      \draw[-latex,garr] (m-3-1.east) -- (m-3-2.west);
+      \draw[-latex,garr] (m-3-2.north) -- (m-2-2.south);
+    \end{tikzpicture}
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item Here is a high-level overview of our new method
+      \item We start with an input program we'd like to analyze
+      \item We first perform an analysis to generate a set of constraints from
+        the program which are fed into our constraint solver, which is a
+        datalog solver
+      \item Then, we perform a thread-modular analysis of each thread in the
+        program
+      \item During the thread modular analysis, as I just showed, each
+        interference combination is analyzed in isolation
+      \item Additionally, the abstract interpreter queries the solver to check
+        if a certain interference combination is actually feasible
+      \item If it is feasible, then it is analyzed, while if it is determined
+        infeasible the interference can be safely skipped
+      \item The end result is that each location in the program is annotated
+        with a set of numerical invariants 
+      \item These invariants can then be used for things like property
+        verification
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Flow-sensitive Thread-modular Abstract Interpretation}
+  %\begin{center}
+  %  Initially: \texttt{x = 0}, \texttt{flag = 0}
+  %\end{center}
+  \begin{columns}
+    \begin{column}{0.5\linewidth}
+      \begin{lstlisting}[name=th201
+                        , numbers=left
+                        , firstnumber=11
+                        , gobble=8]
+        void thread1() {
+          x = 4;
+          x = 5;
+          flag = 1;
+        }
+      \end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\linewidth}
+      \begin{lstlisting}[name=th202
+                        , numbers=left
+                        , firstnumber=21
+                        , gobble=8]
+        void thread2() {
+          int b1 = flag;
+          if (b1) {
+            int t1 = x;
+            assert(t1 == 5);
+          }
+        }
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+  \only<1-7>{
+    \begin{itemize}[<+->]
+      \item Interferences from thread one:
+        \begin{itemize}
+          \item $s_{x_1}: \texttt{x = 4}$
+          \item $s_{x_2}: \texttt{x = 5}$
+          \item $s_{f}: \texttt{flag = 1}$
+        \end{itemize}
+      \item Loads from thread two:
+        \begin{itemize}
+          \item $l_f$
+          \item $l_x$
+        \end{itemize}
+    \end{itemize}
+  } %only
+  \only<8>{
+    \begin{itemize}
+      \item Load-store pairs: $(l_x, \Set{s_{x_1}, s_{x_2}})
+                               , (l_f, \Set{s_{f}})
+                              $%
+    \end{itemize}%
+  }%
+  \begin{itemize}
+    \item<9-> Load-store pairs: $(l_x, \Set{s_{x_1}, s_{x_2}, s_d})
+                             , (l_f, \Set{s_{f}, s_d})
+                            $
+    \item<10-> Interference Combinations:
+      \begin{itemize}[<+->]
+        \item $(\langle l_x, s_{x_1} \rangle
+               , \langle l_f, s_{f} \rangle
+               )$
+        \item $(\langle l_x, s_{x_1} \rangle
+               , \langle l_f, s_{d} \rangle
+               )$
+        \item $(\langle l_x, s_{x_2} \rangle
+               , \langle l_f, s_{f} \rangle
+               )$
+        \item $(\langle l_x, s_{x_2} \rangle
+               , \langle l_f, s_{d} \rangle
+               )$
+        \item $(\langle l_x, s_{d} \rangle
+               , \langle l_f, s_{f} \rangle
+               )$
+        \item $(\langle l_x, s_{d} \rangle
+               , \langle l_f, s_{d} \rangle
+               )$
+      \end{itemize}
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Next, we'll look into closer detail of our flow-sensitive and
+        thread-modular abstract interpretation; to do so, we'll again look at
+        the same running example
+      \item The gist of our technique is to explicitly test the cartesian
+        product of all feasible store-to-load interferences
+      \item First, we can see there are three interfering stores from thread
+        one: two on x, setting it to four and five, and one on flag
+      \item Similarly, there are two loads in thread two: one on flag and
+        another on x
+      \item Next, we pair each each load with every store to the same variable.
+        This explicitly shows all the possible inter-thread data flows
+      \item In addition to this, we have to consider the thread not reading
+        from values from other threads but also reading values from itself. To
+        this end, we use a special store $s_d$ to represent the thread reading
+        from its own local memory
+      \item Next, we take the Cartesian product of all these sets which
+        enumerates all the possible pairings of every load to a single store:
+        these are the six possible combinations we looked at in the previous
+        example
+      \item Given these each of these combinations, we next check if each one
+        individually is feasible in the program
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Checking Interference Feasibility}
+  \begin{itemize}[<+->]
+    \item Horn-clauses with finite domains 
+      \begin{itemize} 
+        \item Solved in polynomial time
+      \end{itemize}
+    \item Must-happen-before relation
+      \begin{itemize}
+        \item Only analyze a single interference combination
+      \end{itemize}
+    \item Contradictions in must-happen-before indicate infeasibility
+    \item Sound
+      \begin{itemize}
+        \item Under-approximate must-happen-before
+      \end{itemize}
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item To check the feasibility of interferences, we generate and check
+        the feasibility of a set of horn clauses over finite domains
+      \item We used horn-clauses, as opposed to other constraints like SMT or
+        SAT, because they have efficient decision procedures: satisfiability
+        can be checked in polynomial time
+      \item The main goal of our analysis is to determine which store-to-load
+        flows are infeasible; we do this mostly by generating the
+        must-happen-before relation; this relation indicates that two
+        statements must have a specific ordering
+      \item One of the keys to making our analysis accurate is that we only
+        generate the must-happen-before relation with respect to a single
+        interference combination as opposed to over the entire program
+      \item After building the must-happen before relation, any contradictions,
+        i.e., cycles indicating a statement must happen-before itself
+        indicating infeasibility.
+      \item Finally, we also ensure our constraint analysis is sound: to do
+        this, we ensure that we under-approximate the must-happen-before
+        relation
+      \item This means that whenever we determine an interference combination
+        as infeasible, it definitely is infeasible in the actual program
+      \item However, we do not guarantee that all infeasible interference
+        combinations will be detected
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Deduction Rules}
+  \begin{center}
+    \begin{tikzpicture}
+      \matrix (m) [matrix of nodes, 
+        column sep=15mm,
+        row sep=10mm,
+        ampersand replacement=\&,
+        nodes={thread},
+        %nodes={draw, % General options for all nodes
+        %  line width=1pt,
+        %  anchor=center, 
+        %  text centered,
+        %  rounded corners,
+        %  %minimum width=1.5cm, minimum height=8mm
+        %},
+          % special styles
+          txt/.style={minimum width=2cm,anchor=center},
+        ] {
+           |[txt]| {\Large \texttt{s = 10}}       % m-1-1
+           \& |[txt]| {\Large \texttt{L1 = s}}       % m-1-2
+           \\
+           \& |[txt]| {\Large \texttt{s = L1 + 5}}     % m-2-2
+           \\
+           \& |[txt]| {\Large \texttt{L2 = s}}     % m-3-2
+           \\
+        };
+        %%%%% MHB Arrows
+        %% l1 = s --> s + t + 5
+        \draw<1->[garr,-latex] (m-1-2.south) -- (m-2-2.north);
+        %% s + t + 5 -> l1 = s
+        \draw<1->[garr,-latex] (m-2-2.south) -- (m-3-2.north);
+        %% ReadFrom edges
+        % l1 = s <-- s = 10
+        \draw<2->[garr,-latex, dashed] (m-1-1.east) -- (m-1-2.west);
+        %% Infeasible reads-from edge:
+        % l2 = s --> s = 10
+        \draw<3->[-latex, darrc] (m-1-1.east) -- ($(m-3-2.west)+(0em,-0.5em)$);
+    \end{tikzpicture}
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item We created a bunch of deduction rules capturing various scenarios
+        where a must-happen-before edge can be inferred 
+      \item Here's an example of one of them. We have one thread on the left
+        performing a store, and a thread on the right performing a load, store,
+        and the subsequent load
+      \item The program-order constraints within each thread are represented by
+        the black arrows
+      \item Suppose that the interference combination we are analyzing contains
+        a store-to-load flow as shown by the dashed edge
+      \item Notice that the right thread is first performing a shared memory
+        read and then performing a shared memory write on the same variable
+      \item This means that the subsequent memory read cannot read the same
+        value: this is because the thread has already overwritten it
+      \item So, we deduce that given the first store-to-load flow, the second
+        yellow store-to-load flow of the right thread is infeasible
+      \item This means that any interference combination containing this
+        infeasible store-to-load combination can be removed from the analysis
+      \item We created other deduction rules in a similar fashion by examining
+        other situations where inter-thread flows become infeasible
+    \end{itemize}
+  }
+\end{frame}
+
+
+\begin{frame}{Optimizations}
+  \begin{itemize}[<+->]
+    \item Property directed pruning
+    \item Clustering
+  \end{itemize}
+  \note{
+    %\begin{itemize}
+    %  \item Next, I'll go over two optimizations we created for our technique
+    %  \item The two optimizations we used we call property directed pruning and
+    %    clustering
+    %\end{itemize}
+    \begin{itemize}
+      \item We introduced two optimizations, one making the analysis property
+        directed, and another we called clustering
+      \item Clustering groups together loads and stores into subsets and only
+        explores the combinations within these clusters, similar to the packing
+        of relational abstract domains
+      \item For the sake of time, I wont go into these details
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[fragile]{Overview}
+  \begin{center}
+    \begin{tikzpicture}
+      \matrix (m) [matrix of nodes, 
+        column sep=12mm,
+        row sep=10mm,
+        ampersand replacement=\&,
+        nodes={draw, % General options for all nodes
+          line width=1pt,
+          anchor=center, 
+          text centered,
+          rounded corners,
+          %minimum width=1.5cm, minimum height=8mm
+        },
+          % special styles
+          txt/.style={minimum width=1cm,anchor=center},
+        ] {
+             |[txt,  text width=2.5cm]| {\Large Program}                       % m-1-1
+           \& |[txt, text width=3.0cm]| {\Large Thread-modular Abstract Interpretation}    % m-1-2
+           \& |[txt, text width=2.5cm]| {\Large Invariants}                             % m-1-3
+           \\
+           % below was previously boldfont
+           \& |[txt, text width=2cm]| {\Large  Query} % m-2-2
+           \&
+           \\
+           % below was previously boldfont
+            |[txt, text width=2.5cm]|  {\Large  $\mu${Z} Solver (Datalog)}      % m-3-1
+           % below was previously boldfont
+           \& |[txt, text width=3.0cm]| {\Large  Interference Feasibility Checking} % m-3-2
+           \\
+     }; % end matrix
+      \draw[-latex,garr] (m-1-1.east) -- (m-1-2.west);
+      \draw[-latex,garr] (m-1-2.east) -- (m-1-3.west);
+
+      \draw[-latex,garr] ([xshift=0.05cm]m-2-2.east) to [out=15,in=-15]  ([xshift=0.75cm]m-1-2.south);
+      \draw[-latex,garr] ([xshift=-0.75cm]m-1-2.south) to [out=165,in=195]  ([xshift=-0.05cm]m-2-2.west);
+   
+      \draw[-latex,garr] (m-1-1.south) -- (m-3-1.north);
+      \draw[-latex,garr] (m-3-1.east) -- (m-3-2.west);
+      \draw[-latex,garr] (m-3-2.north) -- (m-2-2.south);
+    \end{tikzpicture}
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item At this point, I've gone over all the big points of our
+        flow-sensitive analysis
+      \item I first showed how we considered and calculated different
+        interference combinations during the thread-modular abstract
+        interpretation
+      \item And second, I showed some examples of how we determine if certain
+        interference combinations were infeasible
+      \item By repeatedly applying these two steps, we generate a set of more
+        accurate invariants, compared to prior work, for each thread
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Constraint-Based Abstract Interpreter for SC}
+  \begin{itemize}[<+->]
+    \item 38 C programs (SVComp, device drivers)
+    \item Compared to Min\`{e} [VMCAI 2014]
+      \begin{itemize}
+        \item 38 verified properties
+        \item 154s runtime
+      \end{itemize}
+    \item Our fully optimized approach 
+      \begin{itemize}
+        \item 1,078 verified properties
+        \item 480s runtime
+      \end{itemize}
+    \item 28x more verified properties
+    \item 3x increase in time
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Here are the results of our tool testing sequentially consistent
+        programs.
+      \item We ran our tool on 38 C programs and compared it against Mine's
+        non-constraint based thread-modular analyzer
+      \item The benchmarks consisted of programs we created as well as linux
+        device drivers
+      \item His approach was able to verify 38 properties in 154 seconds,
+        whereas our tool, with all it's optimizations, verified 1,078
+        properties in 480 seconds
+      \item This is a total of 28x more verified properties with a 3x increase
+        in runtime
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Handling to TSO/PSO/RMO}
+  \begin{center}
+    Initially: \texttt{x = flag = 0}
+    \begin{tikzpicture}
+      \matrix (wm) [matrix of nodes
+                    , column sep=20mm
+                    , row sep=10mm
+                    % Beamer messes with everything
+                    , ampersand replacement=\&
+                   ]
+       {
+         |[thread]| {\texttt{x = 4}} 
+         \& |[thread]|{\texttt{if (flag)}} 
+         \\
+         |[thread]|{\texttt{x = 5}} 
+         \& |[thread]|{\texttt{assert(x == 5)}}
+         \\
+         |[thread]|{\texttt{flag = 1}} 
+         \& {}
+         \\
+       };%matrix
+       \draw[>=latex,->, garr] (wm-1-1.south) -- (wm-2-1.north);
+       \draw[>=latex,->, garr, visible on=<1-3>] (wm-2-1.south) -- (wm-3-1.north);
+       \draw[>=latex,->, garr] (wm-1-2.south) -- (wm-2-2.north);
+
+       \draw[>=latex,->, darrc, visible on=<2->] (wm-1-1.east) -- (wm-2-2.west);
+       \draw[>=latex,->, darrc, visible on=<2->] (wm-3-1.east) -- (wm-1-2.west);
+       \draw[>=latex,->, darr, visible on=<3->] (wm-2-2.west) -- (wm-2-1.east);
+       % This duplicate arrow is necessary to get the 4th slide to appea, and
+       % thus make the arrow between (2,1) and (3,1) disappear after the third
+       % slide. 
+       \draw[>=latex,->, darr, visible on=<4->] (wm-2-2.west) -- (wm-2-1.east);
+    \end{tikzpicture}
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item The previous constraint analysis reasoning about interference
+        infeasibility assumed sequential consistency 
+      \item Sequential consistency was assumed since program-order constraints
+        between statements were used in the analysis not necessarily enforced
+        under certain weak memory models
+      \item For example, consider this program where the left thread sets x to
+        4, and then to 5, and then sets flag to 1
+      \item The right thread checks if the value of flag is one, and, if so,
+        asserts that x is 5
+      \item Consider the case where the right thread reads flag to be 1, and
+        x to be 4
+      \item Under SC this exection is safe since in order for x to be 4 the
+        assertion must execute before the second write to x, which means flag
+        cannot be one
+      \item But, under PSO and RMO, writes to different variables may be
+        reordered, so, conceptually, the write to flag may occur before the
+        writes to x
+      \item To compensate for this, we developed a set of new inference rules
+        sound under TSO, PSO, and RMO
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}[c]{Memory Model Aware Static Analysis}
+  \begin{center}
+  \begin{tikzpicture}
+  \matrix (mma) [matrix of nodes
+                , column sep=20mm
+                , row sep=10mm
+                % Beamer messes with everything
+                , ampersand replacement=\&
+                , txt/.style={draw,minimum width=2cm,anchor=center,rounded
+                corners,fill=matorange400,line width=1pt},
+                ] 
+    {
+       {}       % m-1-1
+       \& |[txt]| {\Large SC}% m-1-2
+       \& |[txt]| {\Large Correct?}% m-1-2
+       \\
+       |[txt]| {\Large Program}% m-2-1
+       \& |[txt]| {\Large PSO}% m-2-2
+       \& |[txt]| {\Large Correct?}% m-2-2
+       \\
+       {}       % m-3-1
+       \& |[txt]| {\Large RMO}% m-3-2
+       \& |[txt]| {\Large Correct?}% m-3-2
+       \\
+    }; % matrix
+      \draw[-latex,garr] (mma-2-1.east) -- (mma-1-2.west);
+      \draw[-latex,garr] (mma-2-1.east) -- (mma-2-2.west);
+      \draw[-latex,garr] (mma-2-1.east) -- (mma-3-2.west);
+
+      \draw[-latex,garr] (mma-1-2.east) -- (mma-1-3.west);
+      \draw[-latex,garr] (mma-2-2.east) -- (mma-2-3.west);
+      \draw[-latex,garr] (mma-3-2.east) -- (mma-3-3.west);
+  \end{tikzpicture}
+  \end{center}
+  \note{
+    \begin{itemize}
+      \item Specifically, we created a new framework where a static analysis
+        can be parameterized by various memory models
+      \item This has the advantage of the analysis reasoning about programs
+        written for a specific computer architecture in mind
+      \item For example, the user may perform certain optimizations which are
+        only correct assuming a certain memory model
+      \item Prior work is often unable to handle such a case: they are either too
+        strong in that they miss potential bugs, or are too weak to verify the
+        properties of interest
+      \item Additionally, while we only considered TSO, PSO, and RMO in our
+        current implementation, we believe additional memory models could be
+        handled similarly
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Contributions}
+  \begin{itemize}[<+->]
+    \item Weak memory primitive semantics within numerical abstract
+      interpretation
+      \begin{itemize}
+        \item CAS, TAS, fence, 
+      \end{itemize}
+    \item Infeasibility analysis for weak-memory
+      \begin{itemize}
+        \item Proof of correctness
+      \end{itemize}
+    \item Experimental Results
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item The specific contributions of this work included many proofs of
+        correctness which for the sake of time I will not discuess in depth
+        here
+      \item But, in summary, we modeled the semantics of weak memory primitives
+        within a numerical abstract interpretation, and show that this was
+        correct
+      \item We also created a new infeasibility analysis for weak-memory, and
+        proved it was correct
+      \item and finally, we evaluated our approach compared to prior work to
+        show its effectiveness
+    \end{itemize}
+  }
+\end{frame}
+
+
+\begin{frame}{Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+    \item 52 C programs (device drivers), litmus tests
+    \item Compared to Min\`{e}
+      \begin{itemize}
+        \item 1752 verified properties
+        \item 415s
+      \end{itemize}
+    \item Compared to Duet [Farzan and Kincaid, POPL 2012]
+      \begin{itemize}
+        \item 2432 verified properties
+        \item 106s
+      \end{itemize}
+    \item Our new method
+      \begin{itemize}
+        \item 4577 verified properties
+        \item 5387s
+      \end{itemize}
+    \item 12--50x runtime increase
+    \item 1.8--2.6x increase in verified properties
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      %\item Next, we evaluated our approach sound under TSO, PSO and RMO
+      \item We again compared against Mine, and also a tool by Farzan and
+        Kincaid called Duet
+      \item We tested on 52 C programs as well as a large selection of Litmus
+        tests
+      \item Mine was able to verify 1752 properties in 415 seconds, Duet 2432
+        properties in 106 seconds, and our tool verified 4577 properties in
+        5387 seconds
+      \item This is a 12--50x increase in runtime for a 1.8--2.6x increase in
+        the number of verified properties
+    \end{itemize}
+  }
+\end{frame}
 
 %\begin{frame}[fragile,t]
 %
@@ -1801,1298 +3354,6 @@ void thread3() {
   }
 \end{frame}
 
-\section{Flow-sensitive Thread Modular Abstract Interpretation}
 
-\begin{frame}{Overview}
-  \tableofcontents[currentsection,currentsubsection]
-\note {
-  Now that I've gone over some examples, I'll provide the details of our new
-  flow-sensitive analysis
-}
-\end{frame}
-
-\begin{frame}[fragile]{Overview}
-  \begin{center}
-    \begin{tikzpicture}
-      \matrix (m) [matrix of nodes, 
-        column sep=12mm,
-        row sep=10mm,
-        ampersand replacement=\&,
-        nodes={draw, % General options for all nodes
-          line width=1pt,
-          anchor=center, 
-          text centered,
-          rounded corners,
-          %minimum width=1.5cm, minimum height=8mm
-        },
-          % special styles
-          txt/.style={minimum width=1cm,anchor=center},
-        ] {
-             |[txt,  text width=2.5cm]| {\Large Program}                       % m-1-1
-           \& |[txt, text width=3.0cm]| {\Large Thread-modular Abstract Interpretation}    % m-1-2
-           \& |[txt, text width=2.5cm]| {\Large Invariants}                             % m-1-3
-           \\
-           % below was previously boldfont
-           \& |[txt, text width=2cm]| {\Large  Query} % m-2-2
-           \&
-           \\
-           % below was previously boldfont
-            |[txt, text width=2.5cm]|  {\Large  $\mu${Z} Solver (Datalog)}      % m-3-1
-           % below was previously boldfont
-           \& |[txt, text width=3.0cm]| {\Large  Interference Feasibility Checking} % m-3-2
-           \\
-     }; % end matrix
-      \draw[-latex,garr] (m-1-1.east) -- (m-1-2.west);
-      \draw[-latex,garr] (m-1-2.east) -- (m-1-3.west);
-
-      \draw[-latex,garr] ([xshift=0.05cm]m-2-2.east) to [out=15,in=-15]  ([xshift=0.75cm]m-1-2.south);
-      \draw[-latex,garr] ([xshift=-0.75cm]m-1-2.south) to [out=165,in=195]  ([xshift=-0.05cm]m-2-2.west);
-   
-      \draw[-latex,garr] (m-1-1.south) -- (m-3-1.north);
-      \draw[-latex,garr] (m-3-1.east) -- (m-3-2.west);
-      \draw[-latex,garr] (m-3-2.north) -- (m-2-2.south);
-    \end{tikzpicture}
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item Here is a high-level overview of our new method
-      \item We start with an input program we'd like to analyze
-      \item We first perform an analysis to generate a set of constraints from
-        the program which are fed into our constraint solver, which is a
-        datalog solver
-      \item Then, we perform a thread-modular analysis of each thread in the
-        program
-      \item During the thread modular analysis, as I just showed, each
-        interference combination is analyzed in isolation
-      \item Additionally, the abstract interpreter queries the solver to check
-        if a certain interference combination is actually feasible
-      \item If it is feasible, then it is analyzed, while if it is determined
-        infeasible the interference can be safely skipped
-      \item The end result is that each location in the program is annotated
-        with a set of numerical invariants 
-      \item These invariants can then be used for things like property
-        verification
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Flow-sensitive Thread-modular Abstract Interpretation}
-  %\begin{center}
-  %  Initially: \texttt{x = 0}, \texttt{flag = 0}
-  %\end{center}
-  \begin{columns}
-    \begin{column}{0.5\linewidth}
-      \begin{lstlisting}[name=th201
-                        , numbers=left
-                        , firstnumber=11
-                        , gobble=8]
-        void thread1() {
-          x = 4;
-          x = 5;
-          flag = 1;
-        }
-      \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\linewidth}
-      \begin{lstlisting}[name=th202
-                        , numbers=left
-                        , firstnumber=21
-                        , gobble=8]
-        void thread2() {
-          int b1 = flag;
-          if (b1) {
-            int t1 = x;
-            assert(t1 == 5);
-          }
-        }
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \only<1-7>{
-    \begin{itemize}[<+->]
-      \item Interferences from thread one:
-        \begin{itemize}
-          \item $s_{x_1}: \texttt{x = 4}$
-          \item $s_{x_2}: \texttt{x = 5}$
-          \item $s_{f}: \texttt{flag = 1}$
-        \end{itemize}
-      \item Loads from thread two:
-        \begin{itemize}
-          \item $l_f$
-          \item $l_x$
-        \end{itemize}
-    \end{itemize}
-  } %only
-  \only<8>{
-    \begin{itemize}
-      \item Load-store pairs: $(l_x, \Set{s_{x_1}, s_{x_2}})
-                               , (l_f, \Set{s_{f}})
-                              $%
-    \end{itemize}%
-  }%
-  \begin{itemize}
-    \item<9-> Load-store pairs: $(l_x, \Set{s_{x_1}, s_{x_2}, s_d})
-                             , (l_f, \Set{s_{f}, s_d})
-                            $
-    \item<10-> Interference Combinations:
-      \begin{itemize}[<+->]
-        \item $(\langle l_x, s_{x_1} \rangle
-               , \langle l_f, s_{f} \rangle
-               )$
-        \item $(\langle l_x, s_{x_1} \rangle
-               , \langle l_f, s_{d} \rangle
-               )$
-        \item $(\langle l_x, s_{x_2} \rangle
-               , \langle l_f, s_{f} \rangle
-               )$
-        \item $(\langle l_x, s_{x_2} \rangle
-               , \langle l_f, s_{d} \rangle
-               )$
-        \item $(\langle l_x, s_{d} \rangle
-               , \langle l_f, s_{f} \rangle
-               )$
-        \item $(\langle l_x, s_{d} \rangle
-               , \langle l_f, s_{d} \rangle
-               )$
-      \end{itemize}
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Next, we'll look into closer detail of our flow-sensitive and
-        thread-modular abstract interpretation; to do so, we'll again look at
-        the same running example
-      \item The gist of our technique is to explicitly test the cartesian
-        product of all feasible store-to-load interferences
-      \item First, we can see there are three interfering stores from thread
-        one: two on x, setting it to four and five, and one on flag
-      \item Similarly, there are two loads in thread two: one on flag and
-        another on x
-      \item Next, we pair each each load with every store to the same variable.
-        This explicitly shows all the possible inter-thread data flows
-      \item In addition to this, we have to consider the thread not reading
-        from values from other threads but also reading values from itself. To
-        this end, we use a special store $s_d$ to represent the thread reading
-        from its own local memory
-      \item Next, we take the Cartesian product of all these sets which
-        enumerates all the possible pairings of every load to a single store:
-        these are the six possible combinations we looked at in the previous
-        example
-      \item Given these each of these combinations, we next check if each one
-        individually is feasible in the program
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Checking Interference Feasibility}
-  \begin{itemize}[<+->]
-    \item Horn-clauses with finite domains 
-      \begin{itemize} 
-        \item Solved in polynomial time
-      \end{itemize}
-    \item Must-happen-before relation
-      \begin{itemize}
-        \item Only analyze a single interference combination
-      \end{itemize}
-    \item Contradictions in must-happen-before indicate infeasibility
-    \item Sound
-      \begin{itemize}
-        \item Under-approximate must-happen-before
-      \end{itemize}
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item To check the feasibility of interferences, we generate and check
-        the feasibility of a set of horn clauses over finite domains
-      \item We used horn-clauses, as opposed to other constraints like SMT or
-        SAT, because they have efficient decision procedures: satisfiability
-        can be checked in polynomial time
-      \item The main goal of our analysis is to determine which store-to-load
-        flows are infeasible; we do this mostly by generating the
-        must-happen-before relation; this relation indicates that two
-        statements must have a specific ordering
-      \item One of the keys to making our analysis accurate is that we only
-        generate the must-happen-before relation with respect to a single
-        interference combination as opposed to over the entire program
-      \item After building the must-happen before relation, any contradictions,
-        i.e., cycles indicating a statement must happen-before itself
-        indicating infeasibility.
-      \item Finally, we also ensure our constraint analysis is sound: to do
-        this, we ensure that we under-approximate the must-happen-before
-        relation
-      \item This means that whenever we determine an interference combination
-        as infeasible, it definitely is infeasible in the actual program
-      \item However, we do not guarantee that all infeasible interference
-        combinations will be detected
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Deduction Rules}
-  \begin{center}
-    \begin{tikzpicture}
-      \matrix (m) [matrix of nodes, 
-        column sep=15mm,
-        row sep=10mm,
-        ampersand replacement=\&,
-        nodes={thread},
-        %nodes={draw, % General options for all nodes
-        %  line width=1pt,
-        %  anchor=center, 
-        %  text centered,
-        %  rounded corners,
-        %  %minimum width=1.5cm, minimum height=8mm
-        %},
-          % special styles
-          txt/.style={minimum width=2cm,anchor=center},
-        ] {
-           |[txt]| {\Large \texttt{s = 10}}       % m-1-1
-           \& |[txt]| {\Large \texttt{L1 = s}}       % m-1-2
-           \\
-           \& |[txt]| {\Large \texttt{s = L1 + 5}}     % m-2-2
-           \\
-           \& |[txt]| {\Large \texttt{L2 = s}}     % m-3-2
-           \\
-        };
-        %%%%% MHB Arrows
-        %% l1 = s --> s + t + 5
-        \draw<1->[garr,-latex] (m-1-2.south) -- (m-2-2.north);
-        %% s + t + 5 -> l1 = s
-        \draw<1->[garr,-latex] (m-2-2.south) -- (m-3-2.north);
-        %% ReadFrom edges
-        % l1 = s <-- s = 10
-        \draw<2->[garr,-latex, dashed] (m-1-1.east) -- (m-1-2.west);
-        %% Infeasible reads-from edge:
-        % l2 = s --> s = 10
-        \draw<3->[-latex, darrc] (m-1-1.east) -- ($(m-3-2.west)+(0em,-0.5em)$);
-    \end{tikzpicture}
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item We created a bunch of deduction rules capturing various scenarios
-        where a must-happen-before edge can be inferred 
-      \item Here's an example of one of them. We have one thread on the left
-        performing a store, and a thread on the right performing a load, store,
-        and the subsequent load
-      \item The program-order constraints within each thread are represented by
-        the black arrows
-      \item Suppose that the interference combination we are analyzing contains
-        a store-to-load flow as shown by the dashed edge
-      \item Notice that the right thread is first performing a shared memory
-        read and then performing a shared memory write on the same variable
-      \item This means that the subsequent memory read cannot read the same
-        value: this is because the thread has already overwritten it
-      \item So, we deduce that given the first store-to-load flow, the second
-        yellow store-to-load flow of the right thread is infeasible
-      \item This means that any interference combination containing this
-        infeasible store-to-load combination can be removed from the analysis
-      \item We created other deduction rules in a similar fashion by examining
-        other situations where inter-thread flows become infeasible
-    \end{itemize}
-  }
-\end{frame}
-
-
-\begin{frame}{Optimizations}
-  \begin{itemize}[<+->]
-    \item Property directed pruning
-    \item Clustering
-  \end{itemize}
-  \note{
-    %\begin{itemize}
-    %  \item Next, I'll go over two optimizations we created for our technique
-    %  \item The two optimizations we used we call property directed pruning and
-    %    clustering
-    %\end{itemize}
-    \begin{itemize}
-      \item We introduced two optimizations, one making the analysis property
-        directed, and another we called clustering
-      \item Clustering groups together loads and stores into subsets and only
-        explores the combinations within these clusters, similar to the packing
-        of relational abstract domains
-      \item For the sake of time, I wont go into these details
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Overview}
-  \begin{center}
-    \begin{tikzpicture}
-      \matrix (m) [matrix of nodes, 
-        column sep=12mm,
-        row sep=10mm,
-        ampersand replacement=\&,
-        nodes={draw, % General options for all nodes
-          line width=1pt,
-          anchor=center, 
-          text centered,
-          rounded corners,
-          %minimum width=1.5cm, minimum height=8mm
-        },
-          % special styles
-          txt/.style={minimum width=1cm,anchor=center},
-        ] {
-             |[txt,  text width=2.5cm]| {\Large Program}                       % m-1-1
-           \& |[txt, text width=3.0cm]| {\Large Thread-modular Abstract Interpretation}    % m-1-2
-           \& |[txt, text width=2.5cm]| {\Large Invariants}                             % m-1-3
-           \\
-           % below was previously boldfont
-           \& |[txt, text width=2cm]| {\Large  Query} % m-2-2
-           \&
-           \\
-           % below was previously boldfont
-            |[txt, text width=2.5cm]|  {\Large  $\mu${Z} Solver (Datalog)}      % m-3-1
-           % below was previously boldfont
-           \& |[txt, text width=3.0cm]| {\Large  Interference Feasibility Checking} % m-3-2
-           \\
-     }; % end matrix
-      \draw[-latex,garr] (m-1-1.east) -- (m-1-2.west);
-      \draw[-latex,garr] (m-1-2.east) -- (m-1-3.west);
-
-      \draw[-latex,garr] ([xshift=0.05cm]m-2-2.east) to [out=15,in=-15]  ([xshift=0.75cm]m-1-2.south);
-      \draw[-latex,garr] ([xshift=-0.75cm]m-1-2.south) to [out=165,in=195]  ([xshift=-0.05cm]m-2-2.west);
-   
-      \draw[-latex,garr] (m-1-1.south) -- (m-3-1.north);
-      \draw[-latex,garr] (m-3-1.east) -- (m-3-2.west);
-      \draw[-latex,garr] (m-3-2.north) -- (m-2-2.south);
-    \end{tikzpicture}
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item At this point, I've gone over all the big points of our
-        flow-sensitive analysis
-      \item I first showed how we considered and calculated different
-        interference combinations during the thread-modular abstract
-        interpretation
-      \item And second, I showed some examples of how we determine if certain
-        interference combinations were infeasible
-      \item By repeatedly applying these two steps, we generate a set of more
-        accurate invariants, compared to prior work, for each thread
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Constraint-Based Abstract Interpreter for SC}
-  \begin{itemize}[<+->]
-    \item 38 C programs (SVComp, device drivers)
-    \item Compared to Min\`{e} [VMCAI 2014]
-      \begin{itemize}
-        \item 38 verified properties
-        \item 154s runtime
-      \end{itemize}
-    \item Our fully optimized approach 
-      \begin{itemize}
-        \item 1,078 verified properties
-        \item 480s runtime
-      \end{itemize}
-    \item 28x more verified properties
-    \item 3x increase in time
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Here are the results of our tool testing sequentially consistent
-        programs.
-      \item We ran our tool on 38 C programs and compared it against Mine's
-        non-constraint based thread-modular analyzer
-      \item The benchmarks consisted of programs we created as well as linux
-        device drivers
-      \item His approach was able to verify 38 properties in 154 seconds,
-        whereas our tool, with all it's optimizations, verified 1,078
-        properties in 480 seconds
-      \item This is a total of 28x more verified properties with a 3x increase
-        in runtime
-    \end{itemize}
-  }
-\end{frame}
-
-
-\section{Thread Modular Analysis for Weak Memory}
-
-\begin{frame}{Overview}
-  \tableofcontents[currentsection]
-\note {
-  Next, I'll go over the design of a thread-modular verification
-  technique for weak memory.
-}
-\end{frame}
-
-\begin{frame}{Handling to TSO/PSO/RMO}
-  \begin{center}
-    Initially: \texttt{x = flag = 0}
-    \begin{tikzpicture}
-      \matrix (wm) [matrix of nodes
-                    , column sep=20mm
-                    , row sep=10mm
-                    % Beamer messes with everything
-                    , ampersand replacement=\&
-                   ]
-       {
-         |[thread]| {\texttt{x = 4}} 
-         \& |[thread]|{\texttt{if (flag)}} 
-         \\
-         |[thread]|{\texttt{x = 5}} 
-         \& |[thread]|{\texttt{assert(x == 5)}}
-         \\
-         |[thread]|{\texttt{flag = 1}} 
-         \& {}
-         \\
-       };%matrix
-       \draw[>=latex,->, garr] (wm-1-1.south) -- (wm-2-1.north);
-       \draw[>=latex,->, garr, visible on=<1-3>] (wm-2-1.south) -- (wm-3-1.north);
-       \draw[>=latex,->, garr] (wm-1-2.south) -- (wm-2-2.north);
-
-       \draw[>=latex,->, darrc, visible on=<2->] (wm-1-1.east) -- (wm-2-2.west);
-       \draw[>=latex,->, darrc, visible on=<2->] (wm-3-1.east) -- (wm-1-2.west);
-       \draw[>=latex,->, darr, visible on=<3->] (wm-2-2.west) -- (wm-2-1.east);
-       % This duplicate arrow is necessary to get the 4th slide to appea, and
-       % thus make the arrow between (2,1) and (3,1) disappear after the third
-       % slide. 
-       \draw[>=latex,->, darr, visible on=<4->] (wm-2-2.west) -- (wm-2-1.east);
-    \end{tikzpicture}
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item The previous constraint analysis reasoning about interference
-        infeasibility assumed sequential consistency 
-      \item Sequential consistency was assumed since program-order constraints
-        between statements were used in the analysis not necessarily enforced
-        under certain weak memory models
-      \item For example, consider this program where the left thread sets x to
-        4, and then to 5, and then sets flag to 1
-      \item The right thread checks if the value of flag is one, and, if so,
-        asserts that x is 5
-      \item Consider the case where the right thread reads flag to be 1, and
-        x to be 4
-      \item Under SC this exection is safe since in order for x to be 4 the
-        assertion must execute before the second write to x, which means flag
-        cannot be one
-      \item But, under PSO and RMO, writes to different variables may be
-        reordered, so, conceptually, the write to flag may occur before the
-        writes to x
-      \item To compensate for this, we developed a set of new inference rules
-        sound under TSO, PSO, and RMO
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[c]{Memory Model Aware Static Analysis}
-  \begin{center}
-  \begin{tikzpicture}
-  \matrix (mma) [matrix of nodes
-                , column sep=20mm
-                , row sep=10mm
-                % Beamer messes with everything
-                , ampersand replacement=\&
-                , txt/.style={draw,minimum width=2cm,anchor=center,rounded
-                corners,fill=matorange400,line width=1pt},
-                ] 
-    {
-       {}       % m-1-1
-       \& |[txt]| {\Large SC}% m-1-2
-       \& |[txt]| {\Large Correct?}% m-1-2
-       \\
-       |[txt]| {\Large Program}% m-2-1
-       \& |[txt]| {\Large PSO}% m-2-2
-       \& |[txt]| {\Large Correct?}% m-2-2
-       \\
-       {}       % m-3-1
-       \& |[txt]| {\Large RMO}% m-3-2
-       \& |[txt]| {\Large Correct?}% m-3-2
-       \\
-    }; % matrix
-      \draw[-latex,garr] (mma-2-1.east) -- (mma-1-2.west);
-      \draw[-latex,garr] (mma-2-1.east) -- (mma-2-2.west);
-      \draw[-latex,garr] (mma-2-1.east) -- (mma-3-2.west);
-
-      \draw[-latex,garr] (mma-1-2.east) -- (mma-1-3.west);
-      \draw[-latex,garr] (mma-2-2.east) -- (mma-2-3.west);
-      \draw[-latex,garr] (mma-3-2.east) -- (mma-3-3.west);
-  \end{tikzpicture}
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item Specifically, we created a new framework where a static analysis
-        can be parameterized by various memory models
-      \item This has the advantage of the analysis reasoning about programs
-        written for a specific computer architecture in mind
-      \item For example, the user may perform certain optimizations which are
-        only correct assuming a certain memory model
-      \item Prior work is often unable to handle such a case: they are either too
-        strong in that they miss potential bugs, or are too weak to verify the
-        properties of interest
-      \item Additionally, while we only considered TSO, PSO, and RMO in our
-        current implementation, we believe additional memory models could be
-        handled similarly
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Contributions}
-  \begin{itemize}[<+->]
-    \item Weak memory primitive semantics within numerical abstract
-      interpretation
-      \begin{itemize}
-        \item CAS, TAS, fence, 
-      \end{itemize}
-    \item Infeasibility analysis for weak-memory
-      \begin{itemize}
-        \item Proof of correctness
-      \end{itemize}
-    \item Experimental Results
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item The specific contributions of this work included many proofs of
-        correctness which for the sake of time I will not discuess in depth
-        here
-      \item But, in summary, we modeled the semantics of weak memory primitives
-        within a numerical abstract interpretation, and show that this was
-        correct
-      \item We also created a new infeasibility analysis for weak-memory, and
-        proved it was correct
-      \item and finally, we evaluated our approach compared to prior work to
-        show its effectiveness
-    \end{itemize}
-  }
-\end{frame}
-
-
-\begin{frame}{Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
-  \begin{itemize}[<+->]
-    \item 52 C programs (device drivers), litmus tests
-    \item Compared to Min\`{e}
-      \begin{itemize}
-        \item 1752 verified properties
-        \item 415s
-      \end{itemize}
-    \item Compared to Duet [Farzan and Kincaid, POPL 2012]
-      \begin{itemize}
-        \item 2432 verified properties
-        \item 106s
-      \end{itemize}
-    \item Our new method
-      \begin{itemize}
-        \item 4577 verified properties
-        \item 5387s
-      \end{itemize}
-    \item 12--50x runtime increase
-    \item 1.8--2.6x increase in verified properties
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      %\item Next, we evaluated our approach sound under TSO, PSO and RMO
-      \item We again compared against Mine, and also a tool by Farzan and
-        Kincaid called Duet
-      \item We tested on 52 C programs as well as a large selection of Litmus
-        tests
-      \item Mine was able to verify 1752 properties in 415 seconds, Duet 2432
-        properties in 106 seconds, and our tool verified 4577 properties in
-        5387 seconds
-      \item This is a 12--50x increase in runtime for a 1.8--2.6x increase in
-        the number of verified properties
-    \end{itemize}
-  }
-\end{frame}
-
-\section{Incremental Thread Modular Analysis}
-
-\begin{frame}{Overview}
-  \tableofcontents[currentsection]
-\note {
-  Next, I'll discuss our proposed plan to make the previous thread-modular
-  analysis incremental.
-}
-\end{frame}
-
-
-
-\begin{frame}[c]{Incremental Analysis}
-  \begin{itemize}[<+->]
-    \item Given previously analyzed program $P_1$ analyze new version $P_2$
-    \item Ignore unimpacted regions 
-    \item Reuse old analysis information
-    \item Challenges:
-      \begin{itemize}
-        \item Identifying impacted statements?
-        \item Integrating with thread-modular analyzer?
-      \end{itemize}
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      %\item Next I'll show how we made out constraint-based thread-modular
-        %analyzer incremental
-      \item The gist of an incremental analysis is given an old program version
-        which was previously analyzed, analyze a new program version
-      \item This provides an decrease in runtime overhead since the analysis
-        can ignore regions unimpacted by the modifications
-      \item Also, analysis results from the old version can be reused and
-        passed to the new version
-      \item This brings several challenges which we addressed, specifically, it
-        is unclear how to identify impacted statements in the program,
-        particularly when dealing with weak-memory primitives
-      \item For example, if the user modifies, or removes a memory fence which
-        statements in the program are impacted
-      \item We needed to find an efficient way to compute this across threads
-      \item Also, it is unclear how to integrate the impacted-statement
-        information into the thread-modular analyzer in a way that
-        significantly reduces runtime
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Change-Impact Analysis}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[name=ci01
-                        , numbers=left
-                        , firstnumber=1
-                        , gobble=8]
-        x = func();
-        y = otherFunc();
-        if (!x) {
-          x = -1;
-        }
-        if (!y) {
-          y = -1;
-        }
-      \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[name=ci01
-                        , numbers=left
-                        , firstnumber=1
-                        , gobble=8]
-        x = (*\textcolor{matred400}{coolFunc();}*)
-        y = otherFunc();
-        if (!x) {
-          x = -1;
-        }
-        if (!y) {
-          y = -1;
-        }
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \note{
-    \begin{itemize}
-      \item Identifying regions impacted by code modifications is done by
-        what's called a change-impact analysis
-      \item Here, we take modifications to the old program, and identify
-        regions in the new program which may be impacted by the change 
-      \item Suppose the first function called was changed from func to coolFunc
-      \item What we would like to know are the other statements in the program
-        impacted by this modifications
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Change-Impact Analysis}
-  \begin{center}
-    \only<1>{
-    \begin{tikzpicture}[node distance=1.25cm]
-      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
-      \node[thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
-      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
-      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
-      \node[thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
-      \node[thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
-
-      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
-
-      \draw[garr] (yf.east) -| ([xshift=1.5cm]ify.east);
-      \draw[garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
-
-      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
-
-      \draw[garr,>=latex,->] (ify.south) -- (yeq.north);
-    \end{tikzpicture}
-  }%only<1>
-    \only<2->{
-    \begin{tikzpicture}[node distance=1.25cm]
-      \node[thread,fill=matred400] (xf) {\texttt{x = coolFunc()}};
-      \node[opacity=0.2,thread, below of=xf] (yf) {\texttt{y = otherFunc()}};
-      \node[thread, below of=yf] (ifx) {\texttt{if (!x)}};
-      \node[thread, below of=ifx, xshift=1.0cm] (xeq) {\texttt{x = -1}};
-      \node[opacity=0.2,thread, below of=xeq, xshift=-1.0cm] (ify) {\texttt{if (!y)}};
-      \node[opacity=0.2,thread, below of=ify, xshift=1.0cm] (yeq) {\texttt{y = -1}};
-
-      \draw[garr] (xf.west) -| ([xshift=-1.0cm]ifx.west);
-      \draw[garr,>=latex,->] ([xshift=-1.0cm]ifx.west) -- (ifx.west);
-
-      \draw[opacity=0.2,garr] (yf.east) -| ([xshift=1.5cm]ify.east);
-      \draw[opacity=0.2,garr,>=latex,->] ([xshift=1.5cm]ify.east) -- (ify.east);
-
-      \draw[garr,>=latex,->] (ifx.south) -- (xeq.north);
-
-      \draw[opacity=0.2,garr,>=latex,->] (ify.south) -- (yeq.north);
-    \end{tikzpicture}
-  }%only<1->
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item To do this, we first build the program dependency graph, and then
-        compute all the statements reachable from the modified statement
-      \item Specifically, this graph shows both the data and control
-        dependencies between statements
-      \item The statements reachable in the graph from the modified statements
-        are only those involving x
-      \item Now we can start to see why a change-impact analysis is useful to
-        couple with an analyzer: it can automatically reduce the number of
-        statements of interest
-    \end{itemize}
-  }
-\end{frame}
-
-
-\begin{frame}{Incremental Thread-Modular Analysis}
-  \begin{itemize}[<+->]
-    \item May be impacted
-    \item May impact
-    \item Preserve analysis results
-    \item Ignore transfer functions
-  \end{itemize}
-  \note{
-    \begin{itemize} 
-      \item Very briefly, I'll go over how we plan to create an incremental
-        thread-modular analyzer
-      \item We make use of two types of impact information: the first, as we
-        saw before, are identifying statements in the program which may-be
-        impacted by the change
-      \item The second, are statements which may-impact impacted statements
-      \item Using this information we are able to preserve analysis results
-        from the old program version, as well as ignore the transfer functions
-        of many statements
-      \item This causes the analysis to converge much faster and thus reduce
-        runtime
-    \end{itemize} 
-  } 
-\end{frame}
-
-
-
-%\section{Experiments}
-%
-%\begin{frame}{Overview}
-%  \tableofcontents[currentsection,currentsubsection]
-%\note {
-%  Next I'll summarize our experimental results. All tests were done on a
-%  consumer linux laptop with 8 GB of ram and a 2.8 GHz x86 processor
-%}
-%\end{frame}
-
-
-\section{Conclusion}
-
-\begin{frame}{Conclusion}
-  \begin{itemize}[<+->]
-    \item Constraint-Based Thread-Modular Abstract Interpretation
-    \item Handling TSO, PSO, RMO
-    \item Incremental thread-modular analysis
-  \end{itemize}
-  \pause
-  \begin{center}
-  \Huge Questions?
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item So, in conclusion I presented a constraint-based thread-modular
-        abstract interpretation algorithm first handling sequentially consistent programs
-      \item Then, I showed how we created a weak-memory aware analyzer for TSO, PSO, and RMO.
-      \item And finally, I showed how we propose to make the analysis
-        incremental by designing a weak-memory aware change-impact analysis.
-      \item With that I'll take any questions
-    \end{itemize}
-  }
-\end{frame}
-
-
-%%%%%%% Backup slides
-\appendix
-
-\begin{frame}[c]
-  \begin{center}
-\begin{tikzpicture}
-  \draw[fill=matorange400] (-5,-2) rectangle (5,0) node[pos=0.5, visible
-  on=<4->] {Incremental
-  Constraint Based Static Analysis};
-  \draw[fill=matorange400] (-5,-4.5) rectangle (5,-2.5) node[pos=0.5, visible
-  on=<3->] {Weak
-  Memory Aware Constraint Based Static Analysis};
-  \draw[fill=matorange400] (-5,-7) rectangle (5,-5) node[pos=0.5, visible
-  on=<2->] {Constraint
-  Based Static Analysis};
-\end{tikzpicture}
-  \end{center}
-
-  \note{
-    \begin{itemize}
-      \item We answer these research questions in three steps, each building
-        upon the next
-      \item First, I show how a constraint sovler can be coupled with a numeric
-        abstract interpreter to form a new kind of static analysis of
-        concurrent progrmas
-      \item Second, I show how this new analysis can be designed to acurratley
-        analyze weak memory models
-      \item And third, I show how this new weak-memory aware analysis can be
-        made incremental.
-      \item We've made significant progress already towards these goals, with
-        the first two parts already published.
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile,t]{Related Work} 
-\begin{center}
-\begin{tikzpicture}
-  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
-  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
-
-  \DrawSquare{8.0cm}{in}
-  %\DrawSquare{8cm}{out}
-
-  \FillSquare{in}{1}{matorange400}
-  \FillSquare{in}{2}{matorange400}
-  \FillSquare{in}{3}{matorange400}
-  \FillSquare{in}{4}{matorange400}
-
-  \DrawLines{in}
-
-
-  \LabelRegionVis{in}{1}{Bounded Model\\Checking}{<2->}
-  \LabelRegionSmallVis{in}{1}{[Alglave et al, CAV '13]}{<2->}
-
-  \LabelRegionVis{in}{2}{Memory Model Oblvious\\Thread Modular\\Static Analysis}{<3->}
-  \LabelRegionSmallVis{in}{2}{[Min\'{e}, VMCAI '14]}{<3->}
-
-  \LabelRegionVis{in}{3}{Non Modular\\Static Analysis}{<4->}
-  \LabelRegionSmallVis{in}{3}{[Dan et al,  VMCAI '15]}{<4->}
-
-  \LabelRegionVis{in}{4}{Incremental for SC}{<5->}
-  \LabelRegionSmallVis{in}{4}{[Guo et al, FSE '15]}{<5->}
-
-
-  %\node[visible on=<6->] at (-2.5cm,3.5cm) {Incremental};
-  %\node[visible on=<6->] at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  %\node[visible on=<7->] at (2cm,3.5cm) {Property Directed};
-  %\node[visible on=<7->] at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
-
-  %\node at (1.6cm,1cm) {Test Generation};
-  %\node at (4.4cm,1cm) {Bug Hunting};
-  %\node at (1.6cm,-1cm) {Program Repair};
-  %\node at (4.4cm,-1cm) {Verification};
-\end{tikzpicture}
-\end{center}
-
-\note{
-  \begin{itemize}
-    \item We fill in the gaps and build on prior work in the following ways
-    \item First, compared to prior work on bounded model checking, which
-      attempts to find bugs in programs, we instead verify the absense of bugs,
-      even in potentially infinite programs
-    \item Second, prior thread-modular analyses are so called memory-model
-      oblivious: these analyses are unaware of the underlying memory model and
-      often admit incuarracies by assuming the memory model is too weak
-    \item Third, are static verification techniques which are non-thread
-      modular: these are inscalable due to their explicit enumeration of all
-      thread schedules
-    \item And fourth, are prior incremental analyses for concurrent programs:
-      these only handled sequentially consistent programs, and are unable to
-      model weak-memory concurrent programs.
-  \end{itemize}
-}
-\end{frame}
-
-\begin{frame}
-
-\begin{center}
-\begin{tikzpicture}
-  %  \node [fill=matorange400, draw, thick, shape=rectangle, minimum width=9cm, minimum height=8cm, anchor=center] at (3cm,0) {};
-  %\DrawCirc{6cm}{matyellow400}{matyellow400}{matyellow400}{matyellow400}
-
-  \DrawSquare{5.5cm}{in}
-  \DrawSquare{8cm}{out}
-  \FillSquare{out}{1}{matorange400}
-  \FillSquare{out}{2}{matorange400}
-  \FillSquare{out}{3}{matorange400}
-  \FillSquare{out}{4}{matorange400}
-
-  \FillSquare{in}{1}{matyellow400}
-  \FillSquare{in}{2}{matyellow400}
-  \FillSquare{in}{3}{matyellow400}
-  \FillSquare{in}{4}{matyellow400}
-
-  \DrawLines{in}
-
-
-  \LabelRegion{in}{1}{Test Generation}
-  \LabelRegionSmall{in}{1}{[FSE15, ASE16]}
-
-  \LabelRegion{in}{2}{Bug Hunting}
-  \LabelRegionSmall{in}{2}{[ASE14, PLDI15, FSE16$^2$]}
-
-  \LabelRegion{in}{3}{Repair}
-  \LabelRegionSmall{in}{3}{[ICSE15, ISSTA15]}
-
-  \LabelRegion{in}{4}{Verification}
-  \LabelRegionSmall{in}{4}{[FSE16$^1$, FSE17, ASE17]}
-
-
-  \node at (-2.5cm,3.5cm) {Incremental};
-  \node at (-2.5cm,3.15cm) {\tiny [ASE16]};
-  \node at (2cm,3.5cm) {Property Directed};
-  \node at (2cm,3.20cm) {\tiny [ASE14, FSE15]};
-
-  %\node at (1.6cm,1cm) {Test Generation};
-  %\node at (4.4cm,1cm) {Bug Hunting};
-  %\node at (1.6cm,-1cm) {Program Repair};
-  %\node at (4.4cm,-1cm) {Verification};
-\end{tikzpicture}
-\end{center}
-  \note{
-    \begin{itemize}
-      \item With that, I'll take any questions
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Soundness}
-  \begin{itemize}
-    \item<1-> As sound as underlying sequential abstract interpreter
-    \item<2-> Interference combinations \emph{focus} the analysis
-      \begin{itemize}
-        \item<5-> \emph{Systematic Design of Program Analysis Frameworks.} Patrick
-          Cousot and Radhia Cousot. POPL '79.
-        \item<5-> \emph{Parametric Shape Analysis via 3-valued Logic.} Mooly Sagiv,
-          Thomas Reps, and Reinhard Wilhelm. POPL '99, TOPLAS '02.
-      \end{itemize}
-  \end{itemize}
-  \begin{center}
-    \only<3>{
-      \begin{tikzpicture}
-          [txt/.style={minimum width=2cm,anchor=center}
-          ]
-          \node (in) [fill=white, rounded corners] {\Huge $I$};
-
-          \node (f) [fill=white
-                    , rounded corners
-                    , right=2em of in
-                    ]
-                    {\Huge $f()$};
-          \node (out) [fill=white
-                      , rounded corners
-                      , right=2em of f
-                      ]
-                      {\Huge $O$};
-
-          \draw[-latex,garr] (in) -- (f);
-          \draw[-latex,garr] (f) -- (out);
-      \end{tikzpicture}
-    }%only
-    \only<4->{
-      \begin{tikzpicture}
-          [txt/.style={minimum width=2cm,anchor=center}
-          ]
-          \node (in1) [fill=white, rounded corners] {\Huge $I_1$};
-          \node (inds) [fill=white
-                      , below=1em of in1
-                      , rounded corners] 
-                            {\Huge ...};
-          \node (bigi) [fill=white
-                       , left=2em of inds
-                       , rounded corners] 
-                            {\Huge $I$};
-          \node (inn) [fill=white
-                      , below=1em of inds
-                      , rounded corners] 
-                            {\Huge $I_n$};
-
-
-          \node (f1) [fill=white
-                    , rounded corners
-                    , right=2em of in1
-                    ]
-                    {\Huge $f()$};
-
-          \node (fds) [fill=white
-                    , rounded corners
-                    , below=1em of f1
-                    ]
-                    {\Huge ...};
-          \node (fn) [fill=white
-                    , rounded corners
-                    , right=2em of inn
-                    ]
-                    {\Huge $f_n()$};
-          \node (out) [fill=white
-                      , rounded corners
-                      , right=2em of f1
-                      ]
-                      {\Huge $O_1$};
-
-          \node (outds) [fill=white
-                      , rounded corners
-                      , below=1em of out
-                      ]
-                      {\Huge ...};
-          \node (outn) [fill=white
-                      , rounded corners
-                      , below=1em of outds
-                      ]
-                      {\Huge $O_n$};
-          \node (fout) [fill=white
-                      , rounded corners
-                      , right=2em of outds
-                      ]
-                      {\Huge $O$};
-
-          \draw[-latex,garr] (in1) -- (f1);
-          \draw[-latex,garr] (f1) -- (out);
-          
-          \draw[-latex,garr] (inn) -- (fn);
-          \draw[-latex,garr] (fn) -- (outn);
-
-          \draw[-latex,garr] (out) -- (fout);
-          \draw[-latex,garr] (outds) -- (fout);
-          \draw[-latex,garr] (outn) -- (fout);
-
-          \draw[-latex,garr] (bigi) -- (in1);
-          \draw[-latex,garr] (bigi) -- (inds);
-          \draw[-latex,garr] (bigi) -- (inn);
-      \end{tikzpicture}
-    }
-  \end{center}
-  \note{
-    \begin{itemize}
-      \item Finally, I'll provide a discussion on the soundness of our approach
-      \item Most of the thread-modular analysis builds upon the sequential
-        abstract interpreter
-      \item This is because each thread is, essentially, analyzed individually
-        as a sequential program and then has its results propagated to other
-        threads
-      \item Our approach has its soundness based on this approach: we are just
-        as sound as the underlying abstract interpreter 
-      \item This is because we largely are not modifying the semantics of the
-        sequential interpreter
-      \item Specifically, our consideration of interference combinations in
-        isolation is a form of focusing
-      \item At a high level, focusing takes the input to the analysis and
-        instead of analyzing the entire input it breaks it up into smaller
-        pieces
-      \item Each of these pieces are analyzed individually and then the results
-        are combined
-      \item Prior work has already discussed the soundness of this technique
-        and we build of these findings
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Handling Loops}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=loop]
-  int x = 0;
-  void thread1() {
-    create(thread2);
-    while (...) {
-      int t1 = x;
-    }
-    create(thread3);
-  }
-      \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=loop]
-  void thread2() {
-    x = 1;
-    x = 2;
-  }
-  void thread3() {
-    x = 10;
-  }
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \pause
-  \begin{itemize}[<+->]
-    \item 0*1*2*
-    \item $\Set{0,1,2}$
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Thus far, I've ignored the case where shared memory reads are
-        performed within a loop
-      \item In general, when a load is in a loop it can read from an arbitrary,
-        and potentially infinite, number of different interferences
-      \item As a result, if we simply treat loads within loops in the same way
-        as as previously described there could be an infinite number of
-        infinitely long combinations
-      \item Consider this example, thread one creates thread two and then
-        repeatedly loads the value of x an arbitrary number of times before
-        creating thread two
-      \item Notice that there is a must-happen-before edges between the load
-        within the loop and the write to x by thread 3: because thread 3 is
-        created after the load, the load cannot read the values written by
-        thread 3
-      \item So, the value read within the loop could be any sequence starting
-        with an arbitrary number of zeros, followed by ones, followed by 2s
-      \item Our previous system of constraints cannot handle such an infinite
-        sequence so, instead, we merge all the potential interferences into a
-        single value
-      \item This means that the loads performed across loop-iterations will not
-        be handled in a flow-sensitive way, but, any interfering store which
-        cannot be read on any iteration will be remove thus improving acurracy
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Property Directed Pruning}
-
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=motiv3]
-int x = 0;
-void thr(int v) {
-  int t1 = 5 * v;
-  int t2 = x;
-  x = t1 + t2;
-  if (t1 < 0) 
-    ERROR!;
-}
-    \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \begin{lstlisting}[language=C, name=motiv3]
-int main() {
-  thread_create(thr,5);
-  thread_create(thr,10);
-  x = 1;
-  thread_exit(0);
-}
-
-      \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \note{
-    \begin{itemize}
-      \item First, property directed pruning uses slices from the
-        program-dependence graph to remove redundant statements
-      \item If we look at this program, the main thread, on the right, creates
-        two threads with arguments 5 and 10, and then performs a shared memory
-        write to x
-      \item The threads use their argument to perform a computation, and then
-        perform a separate computation related to x
-      \item The property being checked is related to t1, and the input argument
-        to the thread
-      \item If we look at the property being checking within each thread, it
-        only depends on the input to the thread: the shared memory read on x
-        has no influence on the reachability of the ERROR
-      \item So, during the abstract interpretation, we can skip those
-        statements involved with x
-      \item Additionally, when exploring possible interference combinations, we
-        can skip those related to x
-      \item So, this both reduces the number of interference combinations and
-        also reduces the individual analysis of each thread
-      \item These dependencies between statements are captured easily by using
-        the program dependence graph
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}[fragile]{Clustering}
-  \begin{columns}[c]
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=prop]
-int x = 0;
-int y = 0;
-void thread1() {
-  x = 1;
-  y = 1;
-}
-    \end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-    \begin{lstlisting}[language=C, name=prop]
-void thread2() {
-  int t1 = x;
-  int t2 = y;
-  assert(x >= 0);
-  assert(y >= 0);
-}
-    \end{lstlisting}
-    \end{column}
-  \end{columns}
-  \pause
-  \begin{itemize}[<+->]
-    \item $2*2 = 4$ interference combinations
-    \item Clustering: 2 combinations
-  \end{itemize}
-  \note{
-    \begin{itemize}
-      \item The second optimization we use is called clustering and also uses
-        the program dependence graph
-      \item This optimization reduces the number of possible interference
-        combinations thereby reducing the runtime of the analysis
-      \item Here we have two threads, one performing shared memory writes to
-       x and y, and the other is performing shared memory read
-      \item The two properties being analyzed are separately on x and y
-      \item Using the previously described technique, there are two possible
-        interfering stores for each of the loads in thread 2: one from thread 1
-        and one causing thread 2 to read from its own memory environment
-      \item This means that thread 2 will have to be analyzed 4 times, one for
-        each combination
-      \item However, if we look at the program, the properties being checked
-        are performed on disjoint computations 
-      \item Specifically, the writes to x and the writes to y do not influence
-        each other
-      \item So, during the analysis, the combinations between the reads of x
-        and y in thread two can be performed independently
-      \item As a result, we only need to consider the two combinations
-        independently meaning we only need to run the analysis twice for thread
-        two
-    \end{itemize}
-  }
-\end{frame}
-
-\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
-  \begin{itemize}[<+->]
-      \item Average 57\% of program impacted by modifications
-      \item Ranging from 1.5\%--92\%
-      \item Min\'{e}
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 1263 seconds
-        \end{itemize}
-      \item Incremental w/o constraints
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 748 seconds
-        \end{itemize}
-      \item Non-incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 14,389 seconds
-        \end{itemize}
-      \item Incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 2642 seconds
-        \end{itemize}
-    \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Finally, here are the results for our incremental analyzer. We
-        compared again to Min\'{e} and implemented an incremental version of
-        both his algorithm, as well as our constaint-based analyzer
-      \item Our test set had 57\% of the program impacted on average, ranging
-        from 1.5 to 92 percent.
-      \item First, his approach verified 6384 properties in 1,263 seconds,
-        whereas our incremental version verified the same number of properties
-        in 748 seconds, about a 1.7x speedup
-      \item Second, the constraint based approach took 14,000 seconds to verify
-        11,458 properties, whereas our incremental version took only 2642
-        seconds to verify the same number of properties, about a 5.4x speedup
-    \end{itemize}
-  }
-\end{frame}
 
 \end{document}
