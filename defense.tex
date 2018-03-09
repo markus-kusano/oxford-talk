@@ -1191,7 +1191,7 @@ void thread3() {
   \draw (z1.east) -- ([xshift=4mm] z1.east);
   
   \draw (y10.east) -- ([xshift=23.8mm]y10.east);
-  \draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
 
   \draw [-latex] (if-f1) -- (as1);
   \draw [-latex] (if-f2) -- (as2);
@@ -1503,33 +1503,35 @@ void thread3() {
 
   % data dependencies
   \draw [visible on=<2->, -latex] (x5.east) -| ([xshift=10mm]as1.north);
-  \draw (y10.east, visible on=<3->) -- ([xshift=23.8mm]y10.east);
+  \draw [visible on=<3->] (y10.east) -- ([xshift=23.8mm]y10.east);
 
   % Control dependnecies on assertion
   \draw [-latex, visible on=<4->] (if-f1) -- (as1);
   \draw [-latex, visible on=<4->] (if-f2) -- (as2);
 
   %% Fence dependencies
-  %\draw  (x5.west) -| ([xshift=-3mm]fleft.west);
-  %\draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+  \draw [visible on=<5->] (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [visible on=<5->, -latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+  \draw [visible on=<6->, -latex] (y10.south) -- (fleft.north);
 
-  %\draw [-latex] (y10.south) -- (fleft.north);
-  %\draw [-latex] (fleft.south) -- (fl1.north);
+  \draw [visible on=<7->, -latex] (fleft.south) -- (fl1.north);
 
-  %\draw [-latex] (fl1.south) |- (if-f1.west);
-  %
-  %\draw [-latex] (z1) -- (fright);
-  %\draw [-latex] (fright) -- (fl2);
+  % Remaining dependencies
 
-  %\draw [-latex] (fl2) |- (if-f2);
+  \draw [visible on=<8->, -latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [visible on=<8->, -latex] (z1) -- (fright);
+  \draw [visible on=<8->, -latex] (fright) -- (fl2);
 
-  %\draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
-  %\draw (fright.east) -- ([xshift=4mm]fright.east);
+  \draw [visible on=<8->, -latex] (fl2) |- (if-f2);
 
-  %\draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
-  %\draw (z1.east) -- ([xshift=4mm] z1.east);
-  %
-  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+  \draw [visible on=<8->, -latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw [visible on=<8->] (fright.east) -- ([xshift=4mm]fright.east);
+
+  \draw [visible on=<8->] ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw [visible on=<8->] (z1.east) -- ([xshift=4mm] z1.east);
+  
+  %\draw [visible on=<8->] (fleft.east) -- ([xshift=22.2mm]fleft.east);
 
 
 \end{tikzpicture}
@@ -1543,6 +1545,15 @@ void thread3() {
     \item First, we have the regular data dependencies, such as the dependency
       from the writes to \texttt{x} and \texttt{y} to its read in the
       assertion, as well as the control-dependencies guarding the assertions
+    \item Next, we have the dependencies related to fences: these include
+      stores and loads to shared memory before and after the fence
+    \item For example, store--store memory barrier is dependent on both the
+      write to \texttt{x}, as well as the write to \texttt{y}. Additionally,
+      the write to \texttt{flag1} on the left is dependent on the memory
+      barrier.
+    \item The remainder of the dependencies are handled in a similar way
+    \item This gives us all the dependencies in the example, thus providing the
+      full program dependency graph
   \end{itemize}
 }
 \end{frame}
@@ -1595,6 +1606,9 @@ void thread3() {
   \end{columns}
   \note{
     \begin{itemize}
+      \item Given the weak-memory aware dependency analysis we then need to
+        compute the change--impact analysis
+
       \item Building upon the examples we previously looked at, I'll introduce
         the two different types of impact from a modification that we consider
       \item The first considers statements which may-impact a modification
@@ -1609,6 +1623,38 @@ void thread3() {
   Backward reachability from impacted statement is May Impact
 
   Forward reachability from impacted statement is May Be Impacted
+\end{frame}
+
+\begin{frame}{Weak Memory Aware Dependency Analysis}
+  \begin{itemize}[<+->]
+    \item Dependencies calculated as system of deductive rules
+    \item $s_1$: \texttt{x = 10;}
+    \item $s_2$: \texttt{a = x + 10}
+    \item \texttt{a} is dependent on \texttt{x}
+    \item $s_1$ modifies \texttt{x}
+    \item Therefore: $s_2$ is dependent on $s_1$
+    \item Solvable in polynomial time
+  \end{itemize}
+\note{
+  \begin{itemize}
+    \item Briefly, I'll go over more of the details of how the dependency
+      analysis is computed
+    \item Overall, the dependencies are calculated using a system of deductive
+      rules: repeatedly applying the rules until a fixed point is reached
+      results in an overapproximation of all dependencies in the program
+    \item As an example, suppose we have the following two statements, s1 and
+      s2, where s1 writes to \texttt{x}, and s2 reads \texttt{x} and writes to
+      \texttt{a}
+    \item In this scenerio, we can see that \texttt{a} is dependent on
+      \texttt{x}, and that statement $s_1$ modifies \texttt{x}
+    \item From this, we can deduce that statement $s_2$ is dependent on $s_1$
+    \item Here, we show a high-level idea behind the analysis. The low-level
+      detail is that we express these high-level concepts as relations over
+      statements and variables in the program
+    \item Overall, the analysis ends up having worst case polynomial
+      complexity
+  \end{itemize}
+}
 \end{frame}
 
 \section{Experiments}
