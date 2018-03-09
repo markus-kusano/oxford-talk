@@ -1567,26 +1567,27 @@ void thread3() {
   \begin{columns}
     \begin{column}{0.5\textwidth}
       \begin{center}
-        \large
-        \texttt{a = 10;}
+        \Large
+        \visible<2->{\texttt{a = 10;}}
 
         \textcolor{matred400}{\texttt{x = a + 5;}}
       \end{center}
     \end{column}
     \begin{column}{0.5\textwidth}
       \begin{center}
+        \visible<3->{
         \begin{tikzpicture}
           \tikzstyle{node}=[thread,font=\Large]
           \node [node]            (mi-one) {\texttt{a = 10}};
           \node [node, below=2em] (mi-two) {\texttt{x = a + 5}};
           \draw [->, garr] (mi-one.south) -- (mi-two.north);
         \end{tikzpicture}
+        }%
       \end{center}
     \end{column}
   \end{columns}
 
-  \pause
-  %\vspace{2em}
+  \visible<4->{
   \begin{center}
     \Large
     \textbf{May Be Impacted}
@@ -1595,69 +1596,412 @@ void thread3() {
   \begin{columns}
     \begin{column}{0.5\textwidth}
       \begin{center}
-        AAA
+        \textcolor{matred400}{\texttt{x = a + 5;}}
+
+        \visible<5->{\texttt{y = x * 10;}}
       \end{center}
     \end{column}
     \begin{column}{0.5\textwidth}
       \begin{center}
-        BBB
+        \visible<6->{
+        \begin{tikzpicture}
+          \tikzstyle{node}=[thread,font=\Large]
+          \node [node] (im-one) {\texttt{x = a + 5}};
+          \node [node, below=2em]            (im-two) {\texttt{y = x * 10}};
+          \draw [->, garr] (im-one.south) -- (im-two.north);
+        \end{tikzpicture}
+        }%
       \end{center}
     \end{column}
   \end{columns}
+  }
   \note{
     \begin{itemize}
       \item Given the weak-memory aware dependency analysis we then need to
         compute the change--impact analysis
-
-      \item Building upon the examples we previously looked at, I'll introduce
-        the two different types of impact from a modification that we consider
+      \item Again, the goal of the change--impact is to identify the regions of
+        the program affected by a change
+      \item We consider two different kinds of impact from a program
+        modification
       \item The first considers statements which may-impact a modification
-      \item For example, suppose that 
+      \item For example, suppose we have the statement \texttt{x = a + 5} as
+        being modified in the program
+      \item The statements in the program which may-impact the modification are
+        those which may, transitively or otherwise, affect the computation of
+        the modification
+      \item For example, if there is another statement \texttt{a = 10} in the
+        program then this statement may-impact the modification
+      \item Identifying these statements is done via backwards reachability on
+        the program dependency graph, as seen here on the righ
+      \item Dually, we consider statements in the program which may-be impacted
+        by a modification to be those statements who's computation may-be
+        affected by the modification
+      \item Again, with the same modified statement, a statement such as
+        \texttt{y = x * 10} may-be impacted by the modification
+      \item These statements can be identified via forward reachability from
+        the modified statement 
     \end{itemize}
   }
 \end{frame}
 
-\begin{frame}{Calculating May Impact and May Be Impacted}
-  Weak memory aware dependency analysis
+\begin{frame}[c]{Weak-Memory Aware Change Impact Analysis}
+\begin{center}
+%%%% No nodes visible
+\begin{tikzpicture}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [node,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [node,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [node,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [node,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [node,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
 
-  Backward reachability from impacted statement is May Impact
+  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
 
-  Forward reachability from impacted statement is May Be Impacted
-\end{frame}
+  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
 
-\begin{frame}{Weak Memory Aware Dependency Analysis}
-  \begin{itemize}[<+->]
-    \item Dependencies calculated as system of deductive rules
-    \item $s_1$: \texttt{x = 10;}
-    \item $s_2$: \texttt{a = x + 10}
-    \item \texttt{a} is dependent on \texttt{x}
-    \item $s_1$ modifies \texttt{x}
-    \item Therefore: $s_2$ is dependent on $s_1$
-    \item Solvable in polynomial time
-  \end{itemize}
+  \draw [-latex] (y10.south) -- (fleft.north);
+  \draw [-latex] (fleft.south) -- (fl1.north);
+
+  \draw [-latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [-latex] (z1) -- (fright);
+  \draw [-latex] (fright) -- (fl2);
+
+  \draw [-latex] (fl2) |- (if-f2);
+
+  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw (fright.east) -- ([xshift=4mm]fright.east);
+
+  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw (z1.east) -- ([xshift=4mm] z1.east);
+  
+  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
+  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+
+  \draw [-latex] (if-f1) -- (as1);
+  \draw [-latex] (if-f2) -- (as2);
+
+\end{tikzpicture}
+\end{center}
+
 \note{
   \begin{itemize}
-    \item Briefly, I'll go over more of the details of how the dependency
-      analysis is computed
-    \item Overall, the dependencies are calculated using a system of deductive
-      rules: repeatedly applying the rules until a fixed point is reached
-      results in an overapproximation of all dependencies in the program
-    \item As an example, suppose we have the following two statements, s1 and
-      s2, where s1 writes to \texttt{x}, and s2 reads \texttt{x} and writes to
-      \texttt{a}
-    \item In this scenerio, we can see that \texttt{a} is dependent on
-      \texttt{x}, and that statement $s_1$ modifies \texttt{x}
-    \item From this, we can deduce that statement $s_2$ is dependent on $s_1$
-    \item Here, we show a high-level idea behind the analysis. The low-level
-      detail is that we express these high-level concepts as relations over
-      statements and variables in the program
-    \item Overall, the analysis ends up having worst case polynomial
-      complexity
+    \item Given the previously described change--impact analysis, we can
+      finally compute all the statements impacted by a modification
+    \item Here we have the dependency graph of the example program, the
+      modified statement is the store--store memory barrier highlighted in red
+      on the left
   \end{itemize}
 }
 \end{frame}
 
+\begin{frame}[c]{Weak-Memory Aware Change Impact Analysis}
+\begin{center}
+%%%% Forward nodes: May Be impacted
+\begin{tikzpicture}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [node,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [node,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
+
+  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
+
+  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+
+  \draw [-latex] (y10.south) -- (fleft.north);
+  \draw [-latex] (fleft.south) -- (fl1.north);
+
+  \draw [-latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [-latex] (z1) -- (fright);
+  \draw [-latex] (fright) -- (fl2);
+
+  \draw [-latex] (fl2) |- (if-f2);
+
+  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw (fright.east) -- ([xshift=4mm]fright.east);
+
+  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw (z1.east) -- ([xshift=4mm] z1.east);
+  
+  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
+  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+
+  \draw [-latex] (if-f1) -- (as1);
+  \draw [-latex] (if-f2) -- (as2);
+
+\end{tikzpicture}
+\end{center}
+\note{
+  \begin{itemize}
+    \item First, the statements which are forwardly reachable from the modified
+      statement are those which we consider as impacted by the modification
+    \item We can see those here outlined in dashed lines, including the write
+      to flag1, and the read of flag one in the if condition, and the first
+      assertion
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}[c]{Weak-Memory Aware Change Impact Analysis}
+\begin{center}
+%%%% All node types visible
+\begin{tikzpicture}
+  \tikzstyle{node}=[thread,font=\scriptsize]
+  %\tikzstyle{node}=[draw
+  %                  , fill=matorange400
+  %                  , line width=1pt
+  %                  , anchor=center
+  %                  , text centered
+  %                  , rounded corners
+  %                  , font=\scriptsize]
+  \tikzstyle{imp}=[thread, dashed, font=\scriptsize]
+  %\tikzstyle{imp}=[draw
+  %                 , line width=1pt
+  %                 , ggreen
+  %                 , anchor=center
+  %                 , text centered
+  %                 , dashed
+  %                 , rounded corners
+  %                 , font=\scriptsize]
+  \tikzstyle{may-imp}=[node, dotted]
+  \tikzstyle{mod}=[node, draw=matred400, rectangle]
+\matrix (m) [
+ matrix of nodes
+ , column sep=23mm
+ , row sep=3mm
+, ampersand replacement=\&
+]{
+  \node [may-imp,align=center] (x5) { \texttt{x = 5}};
+  \& \node [node,align=center] (z1) { \texttt{z = 1}}; \\
+%
+  \node [may-imp,align=center] (y10) { \texttt{y = 10}};
+  \& \node [node,align=center] (fright) { \texttt{fence}}; \\
+%
+  \node [mod,align=center] (fleft) { \texttt{SSMembar}};
+  \& \node [node,align=center] (fl2) { \texttt{flag2 = 1}}; \\
+%
+  \node [imp,align=center] (fl1) { \texttt{flag1 = 1}};
+  \&  \\
+};%end matrix
+  \node [imp,align=center,below=3mm of m] (if-f1) {\texttt{if (flag1)}};
+  \node [imp,align=center,below=3mm of if-f1] (as1) {\texttt{assert(x + y == 15)}};
+  \node [node,align=center,below=3mm of as1] (if-f2) {\texttt{if (flag2)}};
+  \node [node,align=center,below=3mm of if-f2] (as2) {\texttt{assert(z == 1)}};
+
+  \draw [-latex] (x5.east) -| ([xshift=10mm]as1.north);
+
+  \draw  (x5.west) -| ([xshift=-3mm]fleft.west);
+  \draw [-latex] ([xshift=-3mm]fleft.west) -- (fleft.west);
+
+  \draw [-latex] (y10.south) -- (fleft.north);
+  \draw [-latex] (fleft.south) -- (fl1.north);
+
+  \draw [-latex] (fl1.south) |- (if-f1.west);
+  
+  \draw [-latex] (z1) -- (fright);
+  \draw [-latex] (fright) -- (fl2);
+
+  \draw [-latex] (fl2) |- (if-f2);
+
+  \draw [-latex] ([xshift=4mm]fright.east) |- (as2.east);
+  \draw (fright.east) -- ([xshift=4mm]fright.east);
+
+  \draw ([xshift=4mm] z1.east) -- ([xshift=4mm]fright.east);
+  \draw (z1.east) -- ([xshift=4mm] z1.east);
+  
+  \draw (y10.east) -- ([xshift=23.8mm]y10.east);
+  %\draw (fleft.east) -- ([xshift=22.2mm]fleft.east);
+
+  \draw [-latex] (if-f1) -- (as1);
+  \draw [-latex] (if-f2) -- (as2);
+
+\end{tikzpicture}
+\end{center}
+\note{
+  \begin{itemize}
+    \item Additionally, the statements which are backwardsly reachable from the
+      modified statement are those which may-impact the modification
+    \item These include the writes to \texttt{x} and \texttt{y} before the
+      store--store memory barrier
+    \item This shows the final result of our change--impact analysis
+    \item Here, we can intutively start see why the change-impact analysis can
+      reduce the runtime of the numerical analysis: only a subset of the
+      statements in the program are involved with the modification
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}[c]{Incremental Thread-Modular Abstract Interpretation}
+\begin{center}
+ \begin{tikzpicture}
+   \matrix (m) [
+     matrix of nodes
+     , column sep=5mm
+     , row sep=5mm
+    , ampersand replacement=\&
+     % General options for all nodes
+     , nodes={draw
+       , line width=1pt
+       , anchor=center 
+       , text centered
+       , rounded corners
+       , font=\scriptsize
+       %minimum width=1.5cm, minimum height=8mm
+     }
+   ]{
+     \node [align=center] (np) {New Program Version ($P'$)};
+     \& \node [align=center] (op) {Old Program Version ($P$)};
+     \\
+     \node [align=center] (bwi) {May-Impact Analysis};
+     \& \node [align=center] (fwi) {May-be-Impacted Analysis};
+     \\
+     \node [align=center] (rtf) {Relevant \\ Transfer Functions};
+     \& \node [align=center] (ps) {Preserved \\ Abstract States};
+     \\
+     \node [align=center] (tma) {Thread-Modular Analyzer \\ (Abstract Interpretation)};
+     \& \node [align=center] (pr) {Proofs \\ (SC, TSO, PSO, RMO)};
+     \\
+   };% end matrix
+    \draw[-latex] (np.south) -- (bwi.north);
+    \draw[-latex] (np.south) -- ([yshift=-0.5mm, xshift=0.5mm]fwi.north west);
+    \draw (np.west) -| ([xshift=-0.6cm] tma.west);
+    \draw [-latex] ([xshift=-0.6cm] tma.west) -- (tma.west);
+
+    \draw[-latex] (bwi.south) -- (rtf.north);
+    \draw[-latex] (rtf.south) -- (tma.north);
+    \draw[-latex] (op.south) -- (fwi.north);
+    \draw[-latex] (op.south) -- ([yshift=-0.5mm,xshift=-0.5mm]bwi.north east);
+
+    \draw (op.east) -| ([xshift=1.2cm] ps.east);
+    \draw [-latex] ([xshift=1.2cm] ps.east) -- (ps.east);
+
+    \draw[-latex] (fwi.south) -- (ps.north);
+    \draw[-latex] (ps.south) -- ([yshift=-0.5mm,xshift=-0.5mm]tma.north east);
+    \draw[-latex] (tma.east) -- (pr.west);
+ \end{tikzpicture}
+\end{center}
+\note{
+  \begin{itemize}
+    \item Now that we've gone over our weak-memory aware change--impact
+      analysis I'd like to take a moment to orient where we are in the big
+      picture
+    \item Recall that our goal was to perform an incremental analysis, that is,
+      take an old, previously analyzed program version, and new program version
+      and only analyze the portions of the new program which were modified
+    \item We do this by first running the previously described may-impact and
+      may-be impacted analyses on the programs to identify their respective
+      statements
+    \item The final part of the whole incremental analysis is to integrate the
+      change--impact results, the may-impact and impacted analyses, into the
+      thread-modular abstract interpreter
+    \item We are able to reduce runtime overhead in two ways: first, we
+      identify transfer functions which are relevant to the modifications; and
+      second we preserve the analysis results from the old program version
+      within the new progrma
+    \item Care needs to be taken in both of these steps to ensure soundness
+    \item The remainder of this presentation will describe briefly these two
+      modifications
+  \end{itemize}
+}
+\end{frame}
+
+\begin{frame}{Relevant Transfer Functions}
+
+  \note{
+    \begin{itemize}
+      \item Note that identifying relevant transfer functions is abstract interpretation
+      specific: it cannot 
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Preserving Analysis Results
+\end{frame}
+
 \section{Experiments}
+
+\begin{frame}{Overview}
+  \tableofcontents[currentsection,currentsubsection]
+\note {
+  Next I'll summarize our experimental results. All tests were done on a
+  consumer linux laptop with 8 GB of ram and a 2.8 GHz x86 processor
+}
+\end{frame}
 
 
 %\begin{frame}{Incremental Thread-Modular Analysis}
@@ -1686,15 +2030,6 @@ void thread3() {
 
 
 
-%\section{Experiments}
-%
-%\begin{frame}{Overview}
-%  \tableofcontents[currentsection,currentsubsection]
-%\note {
-%  Next I'll summarize our experimental results. All tests were done on a
-%  consumer linux laptop with 8 GB of ram and a 2.8 GHz x86 processor
-%}
-%\end{frame}
 
 
 \section{Conclusion}
@@ -3398,6 +3733,38 @@ void thread2() {
       \item Obviously this cannot happen, so, the interference is infeasible
     \end{itemize}
   }
+\end{frame}
+
+\begin{frame}{Weak Memory Aware Dependency Analysis}
+  \begin{itemize}[<+->]
+    \item Dependencies calculated as system of deductive rules
+    \item $s_1$: \texttt{x = 10;}
+    \item $s_2$: \texttt{a = x + 10}
+    \item \texttt{a} is dependent on \texttt{x}
+    \item $s_1$ modifies \texttt{x}
+    \item Therefore: $s_2$ is dependent on $s_1$
+    \item Solvable in polynomial time
+  \end{itemize}
+\note{
+  \begin{itemize}
+    \item Briefly, I'll go over more of the details of how the dependency
+      analysis is computed
+    \item Overall, the dependencies are calculated using a system of deductive
+      rules: repeatedly applying the rules until a fixed point is reached
+      results in an overapproximation of all dependencies in the program
+    \item As an example, suppose we have the following two statements, s1 and
+      s2, where s1 writes to \texttt{x}, and s2 reads \texttt{x} and writes to
+      \texttt{a}
+    \item In this scenerio, we can see that \texttt{a} is dependent on
+      \texttt{x}, and that statement $s_1$ modifies \texttt{x}
+    \item From this, we can deduce that statement $s_2$ is dependent on $s_1$
+    \item Here, we show a high-level idea behind the analysis. The low-level
+      detail is that we express these high-level concepts as relations over
+      statements and variables in the program
+    \item Overall, the analysis ends up having worst case polynomial
+      complexity
+  \end{itemize}
+}
 \end{frame}
 
 
