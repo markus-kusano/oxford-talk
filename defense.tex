@@ -840,6 +840,38 @@
   }
 \end{frame}
 
+\begin{frame}{Incremental Thread Modular Abstract Interpretation}
+  \begin{itemize}[<+->]
+    \item Weak-memory Aware Dependency Analysis
+    \item Weak-memory Aware Change--Impact Analysis
+    \item Incremental thread modular abstract interpreter
+    \item Reduces runtime overhead
+  \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Today, I will be presenting the last portion of my dissertation
+        which focuses on incremental thread modular abstract interpretation
+      \item Creating the incremental analysis required solving many novel
+        problems
+      \item First, we developed a new dependency analysis which can find
+        dependencies within programs written assuming weak memory. Here, the
+        main challenge was modeling the effect of concurrency synchronization
+        primitives such as fences
+      \item Then, we created a new change--impact analysis which is capable of
+        identifying statements in the program which were involved with a
+        modification
+      \item Specifically, if the programmer changes some lines of code in the
+        program we'd like to know the set of all statements which could be
+        impacted by this change
+      \item And finally, we show how to integrate this change--impact analysis
+        into the thread-modular abstract interpreter
+      \item Through experiments, we show that this incremental analysis reduces
+        runtime overhead significantly in the presense of small to medium
+        programmer modifications
+    \end{itemize}
+  }
+\end{frame}
+
 \begin{frame}[c]{Completed Research}
   \begin{itemize}[<+->]
     \item Verifying Concurrent Programs:
@@ -858,9 +890,9 @@
   \end{center}
   \note{
     \begin{itemize}
-      \item In summary, my dissertation addresses the following open research
-        questions within the area of verifying the correctness of concurrent
-        programs
+      \item And, just to reiterate: my dissertation addresses the following
+        open research questions within the area of verifying the correctness of
+        concurrent programs
       \item First, we'd like to efficiently perform the verification without an
         explicit enumeration of all schedules
       \item But, while we'd like to be efficient, we also want to be able to
@@ -891,8 +923,8 @@
 \begin{frame}{Overview}
   \tableofcontents[currentsection,currentsubsection]
 \note {
-  Now that I've gone over a recap of my entire dissertation, I'll go over
-  examples motiviating the last chapter on the incremental analysis.
+  Next, I'll go over examples motiviating the last chapter on the incremental
+  analysis.
 }
 \end{frame}
 
@@ -1980,17 +2012,57 @@ void thread3() {
 }
 \end{frame}
 
-\begin{frame}{Relevant Transfer Functions}
-
-  \note{
-    \begin{itemize}
-      \item Note that identifying relevant transfer functions is abstract interpretation
-      specific: it cannot 
-    \end{itemize}
-  }
+\begin{frame}[fragile]{Relevant Transfer Functions}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  fence; // ==> SSMembar
+  flag1 = 1;
+}
+void thread2() { 
+  z = 1;
+  fence;
+  flag2 = 1;
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+  if (flag2)
+    assert(z == 1);
+}
+\end{lstlisting}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{lstlisting}[language=C]
+      XXX
+      \end{lstlisting}
+    \end{column}
+  \end{columns}
+\note{
+  \begin{itemize}
+    \item The first part of integrating the change--impact analysis into the
+      the abstract interpreter is identifying transfer functions in the program
+      which are relevant given the modification
+    \item Transfer functions within an abstract interpreter simply take some
+      memory state in the program, and update the state with respect to a
+      statement being executed
+    \item For example, the transfer function for the first statement in
+      thread one, setting \texttt{x} to 5, will take the state at the start of
+      thread one and create a new state where \texttt{x} is 5.
+    \item Here again we have the example program we've been looking at. Recall
+      that the modification changes the fence to a store--store memory barrier
+    \item Note that identifying relevant transfer functions is abstract interpretation
+    specific: it cannot 
+  \end{itemize}
+}
 \end{frame}
 
-\begin{frame}{Preserving Analysis Results
+\begin{frame}{Preserving Analysis Results}
 \end{frame}
 
 \section{Experiments}
@@ -2003,34 +2075,50 @@ void thread3() {
 }
 \end{frame}
 
+\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
+  \begin{itemize}[<+->]
+      \item Average 57\% of program impacted by modifications
+      \item Ranging from 1.5\%--92\%
+      \item Non-incremental w/o constraints [Min\'{e} 14]
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 1263 seconds
+        \end{itemize}
+      \item Incremental w/o constraints (memory-model unaware)
+        \begin{itemize}
+          \item 6384 verified properties
+          \item 748 seconds
+        \end{itemize}
+      \item Non-incremental with constraints (memory-model aware) [Kusano '17]
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 14,389 seconds
+        \end{itemize}
+      \item Incremental with constraints (memory-model aware)
+        \begin{itemize}
+          \item 11,463 verified properties
+          \item 2642 seconds
+        \end{itemize}
+    \end{itemize}
+  \note{
+    \begin{itemize}
+      \item Finally, here are the results for our incremental analyzer. We
+        compared again to Min\'{e} and implemented an incremental version of
+        both his algorithm, as well as our constaint-based analyzer
+      \item Our test set had 57\% of the program impacted on average, ranging
+        from 1.5 to 92 percent.
+      \item First, his approach verified 6384 properties in 1,263 seconds,
+        whereas our incremental version verified the same number of properties
+        in 748 seconds, about a 1.7x speedup
+      \item Second, the constraint based approach took 14,000 seconds to verify
+        11,458 properties, whereas our incremental version took only 2642
+        seconds to verify the same number of properties, about a 5.4x speedup
+    \end{itemize}
+  }
+\end{frame}
 
-%\begin{frame}{Incremental Thread-Modular Analysis}
-%  \begin{itemize}[<+->]
-%    \item May be impacted
-%    \item May impact
-%    \item Preserve analysis results
-%    \item Ignore transfer functions
-%  \end{itemize}
-%  \note{
-%    \begin{itemize} 
-%      \item Very briefly, I'll go over how we plan to create an incremental
-%        thread-modular analyzer
-%      \item We make use of two types of impact information: the first, as we
-%        saw before, are identifying statements in the program which may-be
-%        impacted by the change
-%      \item The second, are statements which may-impact impacted statements
-%      \item Using this information we are able to preserve analysis results
-%        from the old program version, as well as ignore the transfer functions
-%        of many statements
-%      \item This causes the analysis to converge much faster and thus reduce
-%        runtime
-%    \end{itemize} 
-%  } 
-%\end{frame}
-
-
-
-
+\begin{frame}{Effect of Size of Program Modification}
+\end{frame}
 
 \section{Conclusion}
 
@@ -2507,47 +2595,6 @@ void thread2() {
   }
 \end{frame}
 
-\begin{frame}{Incremental Constraint-Based Abstract Interpreter for TSO, PSO, and RMO}
-  \begin{itemize}[<+->]
-      \item Average 57\% of program impacted by modifications
-      \item Ranging from 1.5\%--92\%
-      \item Min\'{e}
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 1263 seconds
-        \end{itemize}
-      \item Incremental w/o constraints
-        \begin{itemize}
-          \item 6384 verified properties
-          \item 748 seconds
-        \end{itemize}
-      \item Non-incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 14,389 seconds
-        \end{itemize}
-      \item Incremental with constraints
-        \begin{itemize}
-          \item 11,463 verified properties
-          \item 2642 seconds
-        \end{itemize}
-    \end{itemize}
-  \note{
-    \begin{itemize}
-      \item Finally, here are the results for our incremental analyzer. We
-        compared again to Min\'{e} and implemented an incremental version of
-        both his algorithm, as well as our constaint-based analyzer
-      \item Our test set had 57\% of the program impacted on average, ranging
-        from 1.5 to 92 percent.
-      \item First, his approach verified 6384 properties in 1,263 seconds,
-        whereas our incremental version verified the same number of properties
-        in 748 seconds, about a 1.7x speedup
-      \item Second, the constraint based approach took 14,000 seconds to verify
-        11,458 properties, whereas our incremental version took only 2642
-        seconds to verify the same number of properties, about a 5.4x speedup
-    \end{itemize}
-  }
-\end{frame}
 
 \begin{frame}{Overview}
   \tableofcontents[currentsection,currentsubsection]
