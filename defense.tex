@@ -1,5 +1,8 @@
 \documentclass[t]{beamer}
 \usetheme{default}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\pgfplotsset{compat=1.5}
 \usepackage{microtype}
 \usepackage{tikz}
 \usepackage{pgfpages}
@@ -13,6 +16,11 @@
 \usepackage{adjustbox}
 \usepackage{appendixnumberbeamer}
 
+
+\usetikzlibrary{shapes.geometric,shapes.arrows,decorations.pathmorphing}
+\usetikzlibrary{matrix,chains,scopes,positioning,arrows,fit}
+
+\usetikzlibrary{calc}
 \usetikzlibrary{arrows, tikzmark, shadows, calc, matrix, positioning}
 % Allows for line numbers in a listing to be referenced in tikz
 \usetikzmarklibrary{listings}
@@ -2035,13 +2043,32 @@ void thread3() {
   if (flag2)
     assert(z == 1);
 }
-\end{lstlisting}
-    \end{column}
-    \begin{column}{0.5\textwidth}
+\end{lstlisting}%
+    \end{column}%
+    \pause
+    \begin{column}{0.5\textwidth}%
       \begin{lstlisting}[language=C]
-      XXX
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() { 
+  x = 5;
+  y = 10;
+  fence; // ==> SSMembar
+  flag1 = 1;
+}
+void thread2() { 
+
+
+
+}
+void thread3() {
+  if (flag1)
+    assert(x + y == 15);
+
+
+}
       \end{lstlisting}
-    \end{column}
+    \end{column}%
   \end{columns}
 \note{
   \begin{itemize}
@@ -2056,13 +2083,94 @@ void thread3() {
       thread one and create a new state where \texttt{x} is 5.
     \item Here again we have the example program we've been looking at. Recall
       that the modification changes the fence to a store--store memory barrier
-    \item Note that identifying relevant transfer functions is abstract interpretation
-    specific: it cannot 
+    \item Previously, we showed that the change--impact analysis could identify
+      statements which were uninvolved with the modifications
+    \item These statements can have their transfer functions ignored since they
+      play no role in moving the old program version to the new program version
+    \item Some of the most expensive parts of abstract interpretation are these
+      transfer functions since they potentially require examining all the
+      variables in the program
+    \item Additionally, modifications to the program typically affect the data
+      flow, that is, some set of variables in the program; but, the abstract
+      interpreter analyzes the control-flow
+    \item So, this can both prevent expensive operations, and overall better
+      help the abstract interpreter match the problem being solved
+    \item I'll skip the details now, but we show in our paper that this change
+      is sound in that it will not cause any errors to be missed
   \end{itemize}
 }
 \end{frame}
 
-\begin{frame}{Preserving Analysis Results}
+\begin{frame}[fragile]{Preserving Analysis Results}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+\begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() {
+  x = 5; (* $s_1$ *)
+  y = 10; (* $s_2$ *)
+  fence; (* $s_3$ *)
+  flag1 = 1; (* $s_4$ *)
+}
+void thread2() {
+  z = 1; (* $s_5$ *)
+  fence; (* $s_6$ *)
+  flag2 = 1; (* $s_7$ *)
+}
+void thread3() {
+  if (flag1) (* $s_8$ *)
+    assert(x+y==15); (* $s_9$ *)
+  if (flag2) (* $s_{10}$ *)
+    assert(z == 1); (* $s_{11}$ *)
+}
+\end{lstlisting}%
+    \end{column}%
+    \pause
+    \begin{column}{0.5\textwidth}%
+      \begin{lstlisting}[language=C]
+x = y = z = 0;
+flag1 = flag2 = 0;
+void thread1() {
+  x = 5; (* $s_1$ *)
+  y = 10; (* $s_2$ *)
+  fence; (* $s_3$ *)
+  flag1 = 1; (* $s_4$ *)
+}
+void thread2() {
+  z = 1; (* $s_5$ *)
+  fence; (* $s_6$ *)
+  flag2 = 1; (* $s_7$ *)
+}
+void thread3() {
+  if (flag1) (* $s_8$ *)
+    assert(x+y==15); (* $s_9$ *)
+  if (flag2) (* $s_{10}$ *)
+    assert(z == 1); (* $s_{11}$ *)
+}
+      \end{lstlisting}
+    \end{column}%
+  \end{columns}
+\note{
+  \begin{itemize}
+    \item The second integration with the abstract interpreter is to propagate
+      the analysis results from the old program version to the new program
+      version
+    \item Abstract interpretation annotates the program with abstract memory
+      states. Each state represents the set of all possible memory states on
+      all executions at each statement in the program
+    \item Here, I'm showing the states as these numbered S's  after each
+      statement
+    \item Since the entire goal of analyzing the new program version is to
+      generate these states we'd like to be able to preserve them within the
+      new program version
+    \item We do this using the change--impact analysis by preserving the memory
+      states at any statement which must not be impacted by the modification
+    \item Intuitively, this is safe since the statements were not affected by
+      the modification so their results will remain the same
+    \item Again, we provide a more formal proof of this in my dissertation
+  \end{itemize}
+}
 \end{frame}
 
 \section{Experiments}
@@ -2117,32 +2225,115 @@ void thread3() {
   }
 \end{frame}
 
-\begin{frame}{Effect of Size of Program Modification}
+\begin{frame}[c,fragile]{Effect of Size of Program Modification}
+  \begin{center}
+\begin{tikzpicture}[trim axis left]
+  \begin{axis}[
+  %  scale=0.4,
+  %  scale only axis,
+  %  height=0.3\textheight,
+  %  width=\textwidth-\widthof{R}-0.1cm,
+  %  yticklabel style={align=right,inner sep=0pt,xshift=-0.1cm},
+    xlabel={Impacted Statements (\%)},
+    ylabel={Runtime (s)},
+    legend entries={sc1200wdt},
+  % ylabel={\scriptsize Runtime (s)},
+    legend pos=north west,
+    xmin=0,
+    xmax=100,
+    %ymin=0,
+    ymax=85,
+    grid=both,
+  ]
+    \addplot table {sc1200wdt.dat};
+ \end{axis}
+\end{tikzpicture}
+  \end{center}
+\note{
+\begin{itemize}
+  \item Finally, here is a little bit of information about the effect of the
+    size of the modification made to the program on the runtime of the
+    incremental analysis
+  \item This graph shows the relationship between runtime and percentage of the
+    program impacted by program changes for both the incremental and
+    non-incremental technique
+  \item We can see a somewhat linear relationship between the two showing that
+    our technique is able to reduce runtime overhead when the program is not
+    significantly modified
+  \item However, as we 100\% of the program being modified the incremental
+    approach is slightly slower than the non-incremental approach
+  \item Note that these results only show the runtime relative to the
+    percentage of impacted statements; our analysis also uses the percentage of
+    statements which may-impact the change as well
+  \item These are the results for the constraint based analysis but we saw
+    similar results for the non-constraint based analysis as well
+\end{itemize}
+}
 \end{frame}
 
 \section{Conclusion}
 
 \begin{frame}{Future Work}
+  \begin{itemize}[<+->]
+  \item More memory models: ARM, Power, C/C++, Java, interrupt/event-based
+  \item More accurate constraints ($>$3 threads)
+  \item Better alias analysis, more language features
+  \item Different abstract domains
+  \item Use a single solver (Datalog modulo theory, Prolog)
+\end{itemize}
+  \note{
+\begin{itemize}
+  \item Now, I'll start concluding by going over some ideas we have for future
+    work
+  \item First, we believe our constraint based analysis could be applied to
+    other memory models such as ARM, Power, C/C++, Java, and interrupt or event
+    based concurrency models. These would make the analysis more widely
+    applicable, especially analyzing language level memory models
+  \item Second, our technique starts to have inaccuracies since we only
+    consider scenarios involving 2 threads, we believe we could reduce the
+    number of false alarms by reasoning about more complex cases
+  \item Third, it would be better if our implementation were more robust,
+    meaning it had a more accurate alias analysis, and handled more of the
+    language features
+  \item Fourth, it would be interesting to apply the thread-modular abstract
+    interpretation idea to non-thread modular abstract domains, for example, to
+    analyze stuff like caches, worst case execution time, or worst case
+    energy consumption
+  \item Fifth, we explore various interference combinations which in the worst
+    case is an NP-Complete problem so it would be best if we put the entire
+    problem into a single solver, rather than using a boolean Datalog solver
+    along side numerical domains
+  \item in order to make use of advances in solver
+    technology, we could use something like a datalog modulo-theory solver,
+    prolog, or an SMT solver
+\end{itemize}
+  }
 \end{frame}
 
 \begin{frame}{Conclusion}
   \begin{itemize}[<+->]
-    \item Constraint-Based Thread-Modular Abstract Interpretation
-    \item Handling TSO, PSO, RMO
-    \item Incremental thread-modular analysis
+    \item Weak-memory aware dependency analysis
+    \item Change--impact analysis for weak memory
+    \item Incremental thread-modular numerical analysis
+    \item Incremental thread-modular analysis for SC, TSO, PSO, RMO, and
+      ``memory model oblivious''
   \end{itemize}
   \pause
   \begin{center}
-  \Huge Questions?
+  \Huge Thank You!
   \end{center}
   \note{
     \begin{itemize}
-      \item So, in conclusion I presented a constraint-based thread-modular
-        abstract interpretation algorithm first handling sequentially consistent programs
-      \item Then, I showed how we created a weak-memory aware analyzer for TSO, PSO, and RMO.
-      \item And finally, I showed how we propose to make the analysis
-        incremental by designing a weak-memory aware change-impact analysis.
-      \item With that I'll take any questions
+      \item So, in conclusion I presented a weak-memory aware dependency
+        analysis, and showed how to combine it into a change--impact analysis
+        for weak memory 
+      \item I then showed how we created an incremental numerical
+        thread-modular abstract interpreter capable of skipping the transfer
+        functions of some statements, as well as preserving the old analysis
+        results in the new program version.
+      \item This fits into my whole dissertation to build a thread-modular
+        abstract interpretation analysis capable of analyzing SC, TSO, PSO,
+        RMO, as well as prior memory model oblivious thread-modular analyses
     \end{itemize}
   }
 \end{frame}
