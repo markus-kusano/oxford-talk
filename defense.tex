@@ -2310,6 +2310,47 @@ void thread3() {
   }
 \end{frame}
 
+\begin{frame}{Future Work: The Big Picture}
+  \begin{itemize}[<+->]
+    \item This work: refining an over-approximation
+    \item Dual problem: refining an \emph{under}-approximation
+    \item Can they be integrated?
+    \item ``Solving'' the problem
+      \begin{itemize}[<+->]
+        \item Make the tool more robust
+        \item Test on more programs
+        \item Find more inaccuracies 
+      \end{itemize}
+    \item Does this technique generalize?
+  \end{itemize}
+  \note{
+\begin{itemize}
+  \item Next, I wanted to give a brief overview of the big picture of related
+    techniques around this problem, and discuss how that relates to future work
+  \item First, overall this technique worked on refining an over-approximation,
+    that is, removing false alarms introduced by the over-approximation which
+    correspond to behavior which does not actually exist in the program
+  \item The dual problem is refining an under-approximation, that is,
+    generalizing a model of the program in order to handle more of the actual
+    behavior of the program. This includes techniques such as unit testing,
+    model checking, and symbolic execution.
+  \item In my mind, an open question for these dual techniques is if they can
+    be combined and work together better than independently
+  \item Related to this, is the question if the work in my dissertation reaches
+    the end of this problem.
+  \item We tested our tool on a bunch of real Linux device drivers, but it
+    would be nice to expand the benchmarks to more types of programs.
+  \item A big hurdle now is to make the tool more robust, and thus handle a
+    larger variety of programs
+  \item I believe testing on more programs would uncover more sources of
+    inaccuracies, and thus new false alarms, that would require new challenges
+    to address
+  \item Finally, testing on a large number of programs would give a better idea
+    of this technique generalizes 
+\end{itemize}
+  }
+\end{frame}
+
 \begin{frame}{Conclusion}
   \begin{itemize}[<+->]
     \item Weak-memory aware dependency analysis
