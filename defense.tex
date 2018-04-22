@@ -506,6 +506,8 @@
 
   \note{
     \begin{itemize}
+      \item First, a quick recap about the overall problem I'm looking at in my
+        dissertation.
       \item In 2015 a race condition in Intel processors allowed for an
         attacker to perform arbitrary writes to the processors flash memory
       \item This enabled the attackers code to be written directly onto the
@@ -1113,6 +1115,10 @@ void thread3() {
         to \texttt{y}
       \item Because such statement ordering is baked into the fence's semantics
         they cannot be reasonably be analyzed flow-insensitively
+      \item The issue with this is that flow-sensitivity within static analyses
+        often severely harms the runtime performance of the analysis, with
+        minimal increases in acurracy
+      \item So, we would like to avoid flow-sensitivity whereever possible
     \end{itemize}
   }
 \end{frame}
@@ -1145,8 +1151,8 @@ void thread3() {
     \begin{itemize}
       \item To solve this issue of balancing runtime overhead and accuracy we
         propose what we call a semi-flow-sensitive analysis: we analyze only
-        the concurrency constructs flow-sensitively, and leave everything else
-        as flow-insensitively
+        the concurrency constructs flow-sensitively, and do everything else
+        flow-insensitively
       \item Specifically, we analyze non-concurrency synchronization, such as
         the writes to \texttt{x} and \texttt{y}, flow-insensitively; and we
         analyze the fence flow-sensitively
@@ -1255,8 +1261,8 @@ void thread3() {
       this graph
     \item Specifically, we can see that the store--store memory barrier impacts
       the read of \texttt{flag1} guarding the subsequent assertion
-    \item What remains to actually make use of this dependency information is
-      to then subsequently integrate it into the abstract interpreter: the
+    \item What remains to actually make use of this dependency information
+      is to then subsequently integrate it into the abstract interpreter: the
       remainder of this presentation will show how this is done
   \end{itemize}
 }
@@ -1319,15 +1325,15 @@ void thread3() {
   }
 \end{frame}
 
+\section{Cooperative Incremental Thread Modular Abstract Interpretation}
+
 \begin{frame}{Overview}
   \tableofcontents[currentsection]
 \note {
-  Next, I'll discuss our proposed plan to make the previous thread-modular
-  analysis incremental.
+  Next, I'll discuss in detail how we made our incremental analysis. 
 }
 \end{frame}
 
-\section{Cooperative Incremental Thread Modular Abstract Interpretation}
 
 \begin{frame}[c]{Incremental Analysis}
   \begin{itemize}[<+->]
@@ -1359,6 +1365,7 @@ void thread3() {
       \item Also, it is unclear how to integrate the impacted-statement
         information into the thread-modular analyzer in a way that
         significantly reduces runtime
+      \item Next, I'll go over these two points in more detail
     \end{itemize}
   }
 \end{frame}
@@ -1402,9 +1409,10 @@ void thread3() {
         what's called a change-impact analysis
       \item Here, we take modifications to the old program, and identify
         regions in the new program which may be impacted by the change 
-      \item Suppose the first function called was changed from func to coolFunc
-      \item What we would like to know are the other statements in the program
-        impacted by this modifications
+      \item Consider this example where we change a function call from calling
+        func to calling coolFunc
+      \item Given this change, we'd like to know other statements in the
+        program impacted by this modification.
     \end{itemize}
   }
 \end{frame}
@@ -1456,8 +1464,12 @@ void thread3() {
     \begin{itemize}
       \item To do this, we first build the program dependency graph, and then
         compute all the statements reachable from the modified statement
-      \item Specifically, this graph shows both the data and control
+      \item This is done using the dependency analysis we briefly introduced
+        previously
+      \item Specifically, the graph shows both the data and control
         dependencies between statements
+      \item If there is an edge from one node to another, it means the node at
+        the head of the arrow is dependent on the one at the tail
       \item The statements reachable in the graph from the modified statements
         are only those involving x
       \item Now we can start to see why a change-impact analysis is useful to
@@ -1487,8 +1499,8 @@ void thread3() {
         all possible thread schedules
       \item Next, we add to this a flow-sensitive reasoning of memory barriers
         and fences
-      \item Note that both of these analyses are computed in a nested fixed
-        point
+      \item Note that both of these two dependency analyses are computed in a
+        nested fixed point
       \item This means that dependencies found in one are considered in the
         other and vice versa
     \end{itemize}
@@ -2132,10 +2144,10 @@ void thread3() {
 x = y = z = 0;
 flag1 = flag2 = 0;
 void thread1() {
-  x = 5; (* $s_1$ *)
-  y = 10; (* $s_2$ *)
-  fence; (* $s_3$ *)
-  flag1 = 1; (* $s_4$ *)
+  x = 5;
+  y = 10;
+  fence;
+  flag1 = 1;
 }
 void thread2() {
   z = 1; (* $s_5$ *)
@@ -2143,8 +2155,8 @@ void thread2() {
   flag2 = 1; (* $s_7$ *)
 }
 void thread3() {
-  if (flag1) (* $s_8$ *)
-    assert(x+y==15); (* $s_9$ *)
+  if (flag1)
+    assert(x+y==15);
   if (flag2) (* $s_{10}$ *)
     assert(z == 1); (* $s_{11}$ *)
 }
@@ -2210,9 +2222,9 @@ void thread3() {
     \end{itemize}
   \note{
     \begin{itemize}
-      \item Finally, here are the results for our incremental analyzer. We
-        compared again to Min\'{e} and implemented an incremental version of
-        both his algorithm, as well as our constaint-based analyzer
+      \item We compared against prior work made by Min\'{e} and implemented an
+        incremental version of both his algorithm, as well as our
+        constaint-based analyzer
       \item Our test set had 57\% of the program impacted on average, ranging
         from 1.5 to 92 percent.
       \item First, his approach verified 6384 properties in 1,263 seconds,
@@ -2260,8 +2272,9 @@ void thread3() {
   \item We can see a somewhat linear relationship between the two showing that
     our technique is able to reduce runtime overhead when the program is not
     significantly modified
-  \item However, as we 100\% of the program being modified the incremental
-    approach is slightly slower than the non-incremental approach
+  \item However, as we approach 100\% of the program being modified the
+    incremental approach is expected to be slightly slower than the
+    non-incremental approach
   \item Note that these results only show the runtime relative to the
     percentage of impacted statements; our analysis also uses the percentage of
     statements which may-impact the change as well
@@ -2299,10 +2312,10 @@ void thread3() {
     interpretation idea to non-thread modular abstract domains, for example, to
     analyze stuff like caches, worst case execution time, or worst case
     energy consumption
-  \item Fifth, we explore various interference combinations which in the worst
-    case is an NP-Complete problem so it would be best if we put the entire
-    problem into a single solver, rather than using a boolean Datalog solver
-    along side numerical domains
+  \item Fifth, we explore various inter-thread data flow combinations which in
+    the worst case is an NP-Complete problem so it would be best if we put the
+    entire problem into a single solver, rather than using a boolean Datalog
+    solver along side numerical domains
   \item in order to make use of advances in solver
     technology, we could use something like a datalog modulo-theory solver,
     prolog, or an SMT solver
@@ -2346,7 +2359,7 @@ void thread3() {
     inaccuracies, and thus new false alarms, that would require new challenges
     to address
   \item Finally, testing on a large number of programs would give a better idea
-    of this technique generalizes 
+    if this technique generalizes and can be widely applicable
 \end{itemize}
   }
 \end{frame}
@@ -2375,6 +2388,9 @@ void thread3() {
       \item This fits into my whole dissertation to build a thread-modular
         abstract interpretation analysis capable of analyzing SC, TSO, PSO,
         RMO, as well as prior memory model oblivious thread-modular analyses
+      \item Finally, I wanted to thank everyone in my committee for being here
+        today. I wouldn't be where I am today without the support of you and
+        the university and I'm very fortunate for where I am now, so thanks :)
     \end{itemize}
   }
 \end{frame}
